@@ -1,0 +1,29 @@
+{% extends 'todos/base.html' %}
+
+{% block content %}
+<h1>My Todos</h1>
+<div style="text-align: center; margin-bottom: 20px;">
+    <a href="{% url 'todo-create' %}" class="btn">+ Add New Todo</a>
+</div>
+
+<div class="todo-list">
+    {% for todo in todos %}
+    <div class="todo-item">
+        <div>
+            <span class="{% if todo.completed %}completed{% endif %}">
+                {{ todo.title }}
+            </span>
+            {% if todo.description %}
+            <p style="font-size: 0.8em; color: #777; margin: 5px 0 0 0;">{{ todo.description }}</p>
+            {% endif %}
+        </div>
+        <div class="actions">
+            <a href="{% url 'todo-update' todo.pk %}">Edit</a>
+            <a href="{% url 'todo-delete' todo.pk %}" style="color: #ff4d4d;">Delete</a>
+        </div>
+    </div>
+    {% empty %}
+    <p style="text-align: center; color: #777;">No todos yet. Create one!</p>
+    {% endfor %}
+</div>
+{% endblock %}
