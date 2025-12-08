@@ -1,10 +1,14 @@
-const API_URL = 'http://localhost:8000';
+const API_URL = 'http://127.0.0.1:8000';
 
 export const api = {
     async listFiles() {
         try {
             const response = await fetch(`${API_URL}/files/`);
-            if (!response.ok) throw new Error('Failed to fetch files');
+            if (!response.ok) {
+                const text = await response.text();
+                console.error(`List files failed: ${response.status} ${text}`);
+                throw new Error('Failed to fetch files');
+            }
             return await response.json();
         } catch (error) {
             console.error('Error listing files:', error);
@@ -14,6 +18,7 @@ export const api = {
 
     async createFile(name, content = '') {
         try {
+            console.log('Creating file:', name, 'at', `${API_URL}/files/`);
             const response = await fetch(`${API_URL}/files/`, {
                 method: 'POST',
                 headers: {
@@ -21,7 +26,10 @@ export const api = {
                 },
                 body: JSON.stringify({ name, content }),
             });
-            if (!response.ok) throw new Error('Failed to create file');
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Failed to create file: ${response.status} ${text}`);
+            }
             return await response.json();
         } catch (error) {
             console.error('Error creating file:', error);
