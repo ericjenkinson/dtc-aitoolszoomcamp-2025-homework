@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Editor } from './components/Editor';
 import { FileControl } from './components/FileControl';
 import { mockBackend as api } from './services/api';
+import { Toast } from './components/Toast';
 
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 
@@ -9,6 +10,7 @@ function App() {
   const [currentFile, setCurrentFile] = useState(null);
   const [remoteCursors, setRemoteCursors] = useState([]);
   const [userId] = useState(() => 'user-' + Math.random().toString(36).substr(2, 9));
+  const [notification, setNotification] = useState(null); // { message, type }
 
   // Basic routing via query params 
   useEffect(() => {
@@ -66,6 +68,9 @@ function App() {
       window.history.pushState({}, '', url);
 
       joinSession(newFile.id);
+      setNotification({ message: 'Created ' + name, type: 'success' });
+    } else {
+      setNotification({ message: 'Failed to create file', type: 'error' });
     }
   };
 
@@ -73,9 +78,9 @@ function App() {
     if (currentFile) {
       const success = await api.saveFile(currentFile.id, currentFile.content);
       if (success) {
-        alert('File saved!');
+        setNotification({ message: 'File saved successfully!', type: 'success' });
       } else {
-        alert('Failed to save.');
+        setNotification({ message: 'Failed to save file.', type: 'error' });
       }
     }
   };
@@ -90,6 +95,7 @@ function App() {
       window.history.pushState({}, '', url);
 
       joinSession(file.id);
+      setNotification({ message: 'Loaded ' + file.name, type: 'success' });
     }
   };
 
@@ -125,6 +131,14 @@ function App() {
           <h1>Online Code Editor</h1>
           <p>Create a new file to start or ask your interviewer for a link.</p>
         </div>
+      )}
+
+      {notification && (
+        <Toast
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
       )}
     </div>
   );
