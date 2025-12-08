@@ -9,7 +9,7 @@
     - generic [ref=e9]: No files
   - generic [ref=e10]:
     - generic [ref=e11]:
-      - button "← UntitledTest 1765223702520" [ref=e13] [cursor=pointer]
+      - button "← WASM Interview 1765223687537" [ref=e13] [cursor=pointer]
       - generic [ref=e14]: No file selected
     - generic [ref=e15]:
       - button "Save" [disabled] [ref=e16]

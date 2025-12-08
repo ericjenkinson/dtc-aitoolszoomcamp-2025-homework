@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { FileLoadDialog } from './FileLoadDialog';
 
-export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel, interviewId, interviewName, onExit }) {
-    const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
-    const [fileList, setFileList] = useState([]);
 
-    const openLoadDialog = async () => {
-        if (!interviewId) return;
-        const files = await api.listFiles(interviewId);
-        setFileList(files);
-        setIsLoadDialogOpen(true);
-    };
+export function FileControl({ fileName, onSave, onRun, isRunning, runReady, runButtonLabel, interviewName, onExit }) {
+    // Removed Dialog logic
+
 
     return (
         <>
@@ -38,10 +31,7 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
                     >
                         ← {interviewName}
                     </button>
-
-                    <button onClick={() => onCreateFile()}>+ New File</button>
-
-                    <button data-testid="load-file-button" onClick={openLoadDialog}>Load File</button>
+                    {/* New File and Load File moved to FileExplorer */}
                 </div>
 
                 <div style={{ fontWeight: 'bold', marginLeft: '20px' }}>
@@ -66,15 +56,6 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
                 </button>
             </div>
 
-            <FileLoadDialog
-                isOpen={isLoadDialogOpen}
-                onClose={() => setIsLoadDialogOpen(false)}
-                files={fileList}
-                onSelectFile={(id) => {
-                    onLoadFile(id);
-                    setIsLoadDialogOpen(false);
-                }}
-            />
         </>
     );
 }

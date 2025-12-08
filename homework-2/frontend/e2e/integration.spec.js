@@ -20,7 +20,9 @@ test.describe('Collaborative Editor Integration', () => {
 
         // 1. Create a new file
         await page.goto('/');
-        await page.click('button:has-text("+ New File")');
+        // Create file
+        await page.getByTitle('New File').click();
+        await expect(page.getByText('Untitled-1')).toBeVisible();
         const filename = `integration-test-${Date.now()}.js`;
         await page.fill('input[placeholder="filename.js or .py"]', filename);
         await page.click('button:has-text("Check")');

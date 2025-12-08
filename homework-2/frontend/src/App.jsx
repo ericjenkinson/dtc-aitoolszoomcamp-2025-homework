@@ -7,6 +7,7 @@ import { Toast } from './components/Toast';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
 import { SaveFileNameDialog } from './components/SaveFileNameDialog';
+import { FileExplorer } from './components/FileExplorer';
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
 import { OutputPanel } from './components/OutputPanel';
@@ -16,6 +17,7 @@ const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 function App() {
   const [currentInterview, setCurrentInterview] = useState(null);
   const [openFiles, setOpenFiles] = useState([]);
+  const [projectFiles, setProjectFiles] = useState([]); // All files in interview
   const [activeFileId, setActiveFileId] = useState(null);
 
   // Derived state
@@ -54,6 +56,10 @@ function App() {
         const found = interviews.find(i => i.id === parseInt(interviewId));
         if (found) {
           setCurrentInterview(found);
+          // Load project files
+          const files = await api.listFiles(found.id);
+          setProjectFiles(files);
+
           // If valid interview, check for doc
           const docId = params.get('doc');
           if (docId) handleLoadFile(docId, found.id); // Pass interview ID explicitly just in case
@@ -70,8 +76,15 @@ function App() {
     if (!interview) return;
     setCurrentInterview(interview);
     setOpenFiles([]);
+    if (!interview) return;
+    setCurrentInterview(interview);
+    setOpenFiles([]);
+    setProjectFiles([]);
     setActiveFileId(null);
     setExecutionOutput(null);
+
+    // Load files
+    api.listFiles(interview.id).then(files => setProjectFiles(files));
 
     // Update URL
     const url = new URL(window.location);
@@ -157,6 +170,10 @@ function App() {
         window.history.pushState({}, '', url);
 
         joinSession(newFile.id);
+
+        // Add to project files
+        setProjectFiles(prev => [...prev, newFile]);
+
         setNotification({ message: 'Saved as ' + name, type: 'success' });
       }
     } catch (err) {
@@ -300,94 +317,100 @@ function App() {
   }
 
   return (
-    <div className="App">
+    <div className="App" style={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden' }}>
       <SaveFileNameDialog
         isOpen={isSaveAsOpen}
         onClose={() => setIsSaveAsOpen(false)}
         onSave={handleSaveAs}
       />
 
-      <FileControl
-        fileName={currentFile ? currentFile.name : null}
-        interviewId={currentInterview.id}
-        interviewName={currentInterview.name}
-        onExit={() => {
-          setCurrentInterview(null);
-          window.history.pushState({}, '', '/');
-        }}
-        onCreateFile={handleCreateFile}
-        onSave={handleSave}
-        onLoadFile={handleLoadFile}
-        onRun={handleRun}
-        isRunning={isRunning}
-        runReady={
-          (currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) ||
-          isPyodideReady
-        }
-        runButtonLabel={
-          (currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady)
-            ? 'Loading WASM...'
-            : '▶ Run'
-        }
-      />
-
-      <TabBar
-        files={openFiles}
+      <FileExplorer
+        files={projectFiles}
         activeFileId={activeFileId}
-        onSelect={handleTabSelect}
-        onClose={handleTabClose}
+        onSelectFile={handleLoadFile}
+        onCreateFile={handleCreateFile}
       />
 
-      <Editor
-        file={currentFile}
-        onChange={handleContentChange}
-        remoteCursors={remoteCursors}
-        onCursorChange={handleCursorChange}
-      />
-
-      {!currentFile && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          textAlign: 'center',
-          color: 'var(--text-secondary)'
-        }}>
-          <h1>Online Code Editor</h1>
-          <p>Create a new file to start.</p>
-        </div>
-      )}
-
-      {/* Adjust OutputPanel position if needed, or overlay it. StatusLine is fixed at bottom. */}
-      {executionOutput && (
-        <OutputPanel
-          output={executionOutput.output}
-          result={executionOutput.result}
-          error={executionOutput.error}
-          onClose={() => setExecutionOutput(null)}
-          data-testid="output-panel"
-        />
-      )}
-
-      {notification && (
-        <Toast
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification(null)}
-        />
-      )}
-
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100 }}>
-        <StatusLine
-          line={cursorPosition.line}
-          col={cursorPosition.col}
-          language={
-            currentFile
-              ? (currentFile.language || (currentFile.name.endsWith('.py') ? 'Python' : (currentFile.name.endsWith('.js') ? 'JavaScript' : 'Text')))
-              : 'Plain Text'
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <FileControl
+          fileName={currentFile ? currentFile.name : null}
+          interviewName={currentInterview.name}
+          onExit={() => {
+            setCurrentInterview(null);
+            window.history.pushState({}, '', '/');
+          }}
+          onSave={handleSave}
+          onRun={handleRun}
+          isRunning={isRunning}
+          runReady={
+            (currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) ||
+            isPyodideReady
+          }
+          runButtonLabel={
+            (currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady)
+              ? 'Loading WASM...'
+              : '▶ Run'
           }
         />
+
+        <TabBar
+          files={openFiles}
+          activeFileId={activeFileId}
+          onSelect={handleTabSelect}
+          onClose={handleTabClose}
+        />
+
+        <Editor
+          file={currentFile}
+          onChange={handleContentChange}
+          remoteCursors={remoteCursors}
+          onCursorChange={handleCursorChange}
+        />
+
+        {!currentFile && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center',
+            color: 'var(--text-secondary)'
+          }}>
+            <h1>Online Code Editor</h1>
+            <p>Create a new file to start.</p>
+          </div>
+        )}
+
+        {/* Adjust OutputPanel position if needed, or overlay it. StatusLine is fixed at bottom. */}
+        {executionOutput && (
+          <OutputPanel
+            output={executionOutput.output}
+            result={executionOutput.result}
+            error={executionOutput.error}
+            onClose={() => setExecutionOutput(null)}
+            data-testid="output-panel"
+          />
+        )}
+
+        {notification && (
+          <Toast
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
+        )}
+
+        <div style={{ zIndex: 100 }}>
+          <StatusLine
+            line={cursorPosition.line}
+            col={cursorPosition.col}
+            language={
+              currentFile
+                ? (currentFile.language || (currentFile.name.endsWith('.py') ? 'Python' : (currentFile.name.endsWith('.js') ? 'JavaScript' : 'Text')))
+                : 'Plain Text'
+            }
+          />
+        </div>
       </div>
     </div>
   );

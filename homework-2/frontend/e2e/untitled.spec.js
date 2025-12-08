@@ -49,7 +49,7 @@ test.describe('Untitled File Workflow', () => {
         await page.getByRole('button', { name: 'Create' }).click();
 
         // 2. New File
-        await page.getByRole('button', { name: '+ New File' }).click();
+        await page.getByTitle('New File').click();
 
         // 3. Edit (Dirty)
         await page.locator('.cm-content').fill('dirty content');
