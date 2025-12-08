@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Editor } from './components/Editor';
 import { FileControl } from './components/FileControl';
-import { mockBackend as api } from './services/api';
+import { api } from './services/api';
 import { Toast } from './components/Toast';
+import { StatusLine } from './components/StatusLine';
 
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
@@ -20,6 +21,9 @@ function App() {
   const { isReady: isPyodideReady, runPython, error: pyodideError } = usePyodide();
   const [executionOutput, setExecutionOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  // Status Bar state
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
 
   useEffect(() => {
     if (pyodideError) {
@@ -144,6 +148,10 @@ function App() {
     setCurrentFile(prev => ({ ...prev, content: newContent }));
   };
 
+  const handleCursorChange = useCallback((pos) => {
+    setCursorPosition(pos);
+  }, []);
+
   return (
     <div className="App">
       <FileControl
@@ -168,6 +176,7 @@ function App() {
         file={currentFile}
         onChange={handleContentChange}
         remoteCursors={remoteCursors}
+        onCursorChange={handleCursorChange}
       />
 
       {!currentFile && (
@@ -184,6 +193,7 @@ function App() {
         </div>
       )}
 
+      {/* Adjust OutputPanel position if needed, or overlay it. StatusLine is fixed at bottom. */}
       {executionOutput && (
         <OutputPanel
           output={executionOutput.output}
@@ -201,6 +211,18 @@ function App() {
           onClose={() => setNotification(null)}
         />
       )}
+
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100 }}>
+        <StatusLine
+          line={cursorPosition.line}
+          col={cursorPosition.col}
+          language={
+            currentFile
+              ? (currentFile.language || (currentFile.name.endsWith('.py') ? 'Python' : (currentFile.name.endsWith('.js') ? 'JavaScript' : 'Text')))
+              : 'Plain Text'
+          }
+        />
+      </div>
     </div>
   );
 }

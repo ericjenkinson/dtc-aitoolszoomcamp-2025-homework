@@ -44,7 +44,7 @@ const darkTheme = EditorView.theme({
     }
 }, { dark: true });
 
-export function Editor({ file, onChange, remoteCursors = [] }) {
+export function Editor({ file, onChange, remoteCursors = [], onCursorChange }) {
     // remoteCursors is Array<{userId, position, color, name}>
 
     const extensions = useMemo(() => {
@@ -130,6 +130,29 @@ export function Editor({ file, onChange, remoteCursors = [] }) {
                 extensions={extensions}
                 onChange={(val) => {
                     onChange(val);
+                }}
+                onUpdate={(viewUpdate) => {
+                    if (onCursorChange) {
+                        const state = viewUpdate.state;
+                        const head = state.selection.main.head;
+                        const line = state.doc.lineAt(head);
+                        const newLine = line.number;
+                        const newCol = head - line.from + 1;
+
+                        // We could check if it changed here, but React state setter handles equality check mostly.
+                        // However, onUpdate fires often. Let's just pass it up. 
+                        // The issue is likely that passing a new function `setCursorPosition` or object causes re-subscription.
+                        // Actually, setCursorPosition is stable.
+                        // But maybe CodeMirror is re-mounting? 
+                        // Let's debounce or just ensure we don't spam.
+                        // Better: Check if selection changed.
+                        if (viewUpdate.selectionSet) {
+                            onCursorChange({
+                                line: newLine,
+                                col: newCol
+                            });
+                        }
+                    }
                 }}
                 basicSetup={{
                     lineNumbers: true,
