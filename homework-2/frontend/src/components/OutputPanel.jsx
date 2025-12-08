@@ -1,10 +1,10 @@
 import React from 'react';
 
-export function OutputPanel({ output, error, onClose }) {
-    if (!output && !error) return null;
+export function OutputPanel({ output, result, error, onClose, ...props }) {
+    if (!output && !error && !result) return null;
 
     return (
-        <div style={{
+        <div {...props} style={{
             position: 'fixed',
             bottom: 0,
             left: 0,
@@ -36,7 +36,13 @@ export function OutputPanel({ output, error, onClose }) {
 
             {output && (
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#dbdbdb' }}>
-                    {output}
+                    {Array.isArray(output) ? output.join('\n') : output}
+                </pre>
+            )}
+
+            {result !== undefined && result !== null && (
+                <pre style={{ margin: '10px 0 0 0', whiteSpace: 'pre-wrap', color: '#4caf50' }}>
+                    {'> ' + String(result)}
                 </pre>
             )}
 

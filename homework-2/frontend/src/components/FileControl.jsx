@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 
-export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, isPyodideReady }) {
+export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel }) {
     const [newFileName, setNewFileName] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +62,7 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
                         {isLoading ? 'Close List' : 'Load File'}
                     </button>
 
+
                     {isLoading && (
                         <div style={{
                             position: 'absolute',
@@ -113,14 +114,14 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
                 <button
                     data-testid="run-button"
                     onClick={onRun}
-                    disabled={!isPyodideReady || isRunning}
+                    disabled={!runReady || isRunning}
                     style={{
-                        opacity: (!isPyodideReady || isRunning) ? 0.5 : 1,
+                        opacity: (!runReady || isRunning) ? 0.5 : 1,
                         backgroundColor: isRunning ? '#d4a017' : '#4CAF50',
                         marginLeft: '5px'
                     }}
                 >
-                    {isRunning ? 'Running...' : (isPyodideReady ? '▶ Run' : 'Loading WASM...')}
+                    {isRunning ? 'Running...' : (runButtonLabel || '▶ Run')}
                 </button>
             </div>
         </div>

@@ -5,6 +5,7 @@ import { mockBackend as api } from './services/api';
 import { Toast } from './components/Toast';
 
 import { usePyodide } from './hooks/usePyodide';
+import { runJavascript } from './utils/jsRunner';
 import { OutputPanel } from './components/OutputPanel';
 
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
@@ -122,7 +123,14 @@ function App() {
     setExecutionOutput(null);
 
     try {
-      const result = await runPython(currentFile.content);
+      let result;
+      if (currentFile.language === 'python' || currentFile.name.endsWith('.py')) {
+        result = await runPython(currentFile.content);
+      } else if (currentFile.language === 'javascript' || currentFile.name.endsWith('.js')) {
+        result = await runJavascript(currentFile.content);
+      } else {
+        result = { error: 'Unsupported language for execution' };
+      }
       setExecutionOutput(result);
     } catch (err) {
       setExecutionOutput({ error: err.toString() });
@@ -139,13 +147,21 @@ function App() {
   return (
     <div className="App">
       <FileControl
-        fileName={currentFile?.name}
+        fileName={currentFile ? currentFile.name : null}
         onCreateFile={handleCreateFile}
         onSave={handleSave}
         onLoadFile={handleLoadFile}
         onRun={handleRun}
         isRunning={isRunning}
-        isPyodideReady={isPyodideReady}
+        runReady={
+          (currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) ||
+          isPyodideReady
+        }
+        runButtonLabel={
+          (currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady)
+            ? 'Loading WASM...'
+            : '▶ Run'
+        }
       />
 
       <Editor
@@ -174,6 +190,7 @@ function App() {
           result={executionOutput.result}
           error={executionOutput.error}
           onClose={() => setExecutionOutput(null)}
+          data-testid="output-panel"
         />
       )}
 
