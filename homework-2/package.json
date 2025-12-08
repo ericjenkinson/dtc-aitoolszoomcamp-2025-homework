@@ -1,0 +1,13 @@
+{
+    "name": "homework-2-root",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" --kill-others",
+        "dev:backend": "cd backend && python3 -m uvicorn main:app --reload --port 8000",
+        "dev:frontend": "cd frontend && npm run dev"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.0"
+    }
+}
