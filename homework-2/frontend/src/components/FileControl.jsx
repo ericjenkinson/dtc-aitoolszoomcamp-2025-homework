@@ -2,19 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { FileLoadDialog } from './FileLoadDialog';
 
-export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel, interviewId }) {
-    const [newFileName, setNewFileName] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
+export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel, interviewId, interviewName, onExit }) {
     const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
     const [fileList, setFileList] = useState([]);
-
-    const handleCreate = () => {
-        if (newFileName.trim()) {
-            onCreateFile(newFileName);
-            setNewFileName('');
-            setIsCreating(false);
-        }
-    };
 
     const openLoadDialog = async () => {
         if (!interviewId) return;
@@ -35,24 +25,21 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
                 justifyContent: 'space-between'
             }}>
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    {isCreating ? (
-                        <>
-                            <input
-                                value={newFileName}
-                                onChange={(e) => setNewFileName(e.target.value)}
-                                placeholder="filename.js or .py"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleCreate();
-                                    if (e.key === 'Escape') setIsCreating(false);
-                                }}
-                            />
-                            <button onClick={handleCreate} style={{ backgroundColor: 'var(--success-color)' }}>Check</button>
-                            <button onClick={() => setIsCreating(false)} style={{ backgroundColor: 'var(--danger-color)' }}>X</button>
-                        </>
-                    ) : (
-                        <button onClick={() => setIsCreating(true)}>+ New File</button>
-                    )}
+                    <button
+                        onClick={onExit}
+                        style={{
+                            backgroundColor: '#333',
+                            color: '#ccc',
+                            border: '1px solid #555',
+                            marginRight: '10px'
+                        }}
+                        title="Exit Interview"
+                        data-testid="exit-interview-button"
+                    >
+                        ← {interviewName}
+                    </button>
+
+                    <button onClick={() => onCreateFile()}>+ New File</button>
 
                     <button data-testid="load-file-button" onClick={openLoadDialog}>Load File</button>
                 </div>

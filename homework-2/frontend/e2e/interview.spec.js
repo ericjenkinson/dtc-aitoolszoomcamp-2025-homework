@@ -13,7 +13,8 @@ test.describe('Interview Project Structure', () => {
         await page.getByRole('button', { name: 'Create' }).click();
 
         // 3. Verify redirected to Editor
-        await expect(page.getByText(`Interview: ${interviewName}`)).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toContainText(interviewName);
         await expect(page.getByText('Create a new file')).toBeVisible();
 
         // 4. Create File in Interview A
@@ -28,14 +29,15 @@ test.describe('Interview Project Structure', () => {
         await page.getByRole('button', { name: '×' }).click(); // Close dialog
 
         // 6. Switch Interview
-        await page.getByText('Switch Interview').click();
+        await page.getByTitle('Exit Interview').click();
         await expect(page.getByText('Interview Manager')).toBeVisible();
 
         // 7. Create Interview B
         const interviewNameB = 'Second Interview ' + Date.now();
         await page.getByPlaceholder('Interview Name').fill(interviewNameB);
         await page.getByRole('button', { name: 'Create' }).click();
-        await expect(page.getByText(`Interview: ${interviewNameB}`)).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toContainText(interviewNameB);
 
         // 8. Verify File A is NOT visible in Interview B
         await page.getByTestId('load-file-button').click();
@@ -44,9 +46,10 @@ test.describe('Interview Project Structure', () => {
         await page.getByRole('button', { name: '×' }).click();
 
         // 9. Switch back to A
-        await page.getByText('Switch Interview').click();
+        await page.getByTestId('exit-interview-button').click();
         await page.getByText(interviewName).click();
-        await expect(page.getByText(`Interview: ${interviewName}`)).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toBeVisible();
+        await expect(page.getByTestId('exit-interview-button')).toContainText(interviewName);
 
         // 10. Verify File A available again
         await page.getByTestId('load-file-button').click();

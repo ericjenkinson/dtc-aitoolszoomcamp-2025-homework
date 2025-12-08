@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Editor } from './components/Editor';
+import { InterviewManager } from './components/InterviewManager';
 import { FileControl } from './components/FileControl';
 import { api } from './services/api';
 import { Toast } from './components/Toast';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
-import { InterviewManager } from './components/InterviewManager';
-
+import { SaveFileNameDialog } from './components/SaveFileNameDialog';
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
 import { OutputPanel } from './components/OutputPanel';
@@ -23,6 +23,9 @@ function App() {
   const [remoteCursors, setRemoteCursors] = useState([]);
   const [userId] = useState(() => 'user-' + Math.random().toString(36).substr(2, 9));
   const [notification, setNotification] = useState(null); // { message, type }
+
+  // Dialog state
+  const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
 
   // Execution state
   const { isReady: isPyodideReady, runPython, error: pyodideError } = usePyodide();
@@ -104,35 +107,62 @@ function App() {
     return disconnect;
   }, [userId]);
 
-  const handleCreateFile = async (name) => {
+  const handleCreateFile = async () => {
     if (!currentInterview) return;
-    try {
-      const newFile = await api.createFile(name, '// Start coding...', currentInterview.id);
-      if (newFile) {
-        setOpenFiles(prev => [...prev, newFile]);
-        setActiveFileId(newFile.id);
+    const tempId = 'temp-' + Date.now();
+    const newFile = {
+      id: tempId,
+      name: 'Untitled-' + (openFiles.filter(f => f.isTemp).length + 1),
+      content: '',
+      language: 'plaintext',
+      isTemp: true
+    };
 
-        // Update URL
-        const url = new URL(window.location);
-        url.searchParams.set('doc', newFile.id); // interview param persists
-        window.history.pushState({}, '', url);
-
-        joinSession(newFile.id);
-        setNotification({ message: 'Created ' + name, type: 'success' });
-      }
-    } catch (err) {
-      setNotification({ message: err.message || 'Failed to create file', type: 'error' });
-    }
+    setOpenFiles(prev => [...prev, newFile]);
+    setActiveFileId(tempId);
+    // Not updating URL for untitled files to avoid invalid state
   };
 
   const handleSave = async () => {
     if (currentFile) {
-      const success = await api.saveFile(currentFile.id, currentFile.content);
-      if (success) {
-        setNotification({ message: 'File saved successfully!', type: 'success' });
+      if (currentFile.isTemp) {
+        setIsSaveAsOpen(true);
       } else {
-        setNotification({ message: 'Failed to save file.', type: 'error' });
+        const success = await api.saveFile(currentFile.id, currentFile.content);
+        if (success) {
+          setNotification({ message: 'File saved successfully!', type: 'success' });
+        } else {
+          setNotification({ message: 'Failed to save file.', type: 'error' });
+        }
       }
+    }
+  };
+
+  const handleSaveAs = async (name) => {
+    if (!currentInterview || !currentFile) return;
+    setIsSaveAsOpen(false);
+
+    try {
+      const newFile = await api.createFile(name, currentFile.content, currentInterview.id);
+      if (newFile) {
+        setOpenFiles(prev => prev.map(f => {
+          if (f.id === currentFile.id) return newFile;
+          return f;
+        }));
+        setActiveFileId(newFile.id);
+
+        // Update URL
+        const url = new URL(window.location);
+        url.searchParams.set('doc', newFile.id);
+        window.history.pushState({}, '', url);
+
+        joinSession(newFile.id);
+        setNotification({ message: 'Saved as ' + name, type: 'success' });
+      }
+    } catch (err) {
+      setNotification({ message: err.message || 'Failed to create file', type: 'error' });
+      // Re-open dialog on error? Or just show notification.
+      // If error, keeping as untitled.
     }
   };
 
@@ -201,14 +231,30 @@ function App() {
 
   const handleTabSelect = (id) => {
     setActiveFileId(id);
+    const file = openFiles.find(f => f.id === id);
+
     // Update URL
     const url = new URL(window.location);
-    url.searchParams.set('doc', id);
+    if (file && !file.isTemp) {
+      url.searchParams.set('doc', id);
+      joinSession(id);
+    } else {
+      url.searchParams.delete('doc');
+      setRemoteCursors([]); // clear cursors for temp
+    }
     window.history.pushState({}, '', url);
-    joinSession(id);
   };
 
   const handleTabClose = (id) => {
+    const file = openFiles.find(f => f.id === id);
+    if (!file) return;
+
+    if (file.isTemp && file.content.length > 0) {
+      if (!window.confirm('You have unsaved changes. Close without saving?')) {
+        return;
+      }
+    }
+
     setOpenFiles(prev => {
       const newFiles = prev.filter(f => f.id !== id);
       if (activeFileId === id) {
@@ -217,20 +263,35 @@ function App() {
         setActiveFileId(newActive);
         if (newActive) {
           const url = new URL(window.location);
-          url.searchParams.set('doc', newActive);
-          window.history.pushState({}, '', url);
-          joinSession(newActive);
+          url.searchParams.set('doc', newActive); // Ensure we use the NEW active ID
+          const activeFile = newFiles.find(f => f.id === newActive);
+          if (activeFile && !activeFile.isTemp) {
+            window.history.pushState({}, '', url);
+          } else {
+            // If switching to temp or null, just keep interview param
+            const u = new URL(window.location);
+            u.searchParams.set('interview', currentInterview.id);
+            u.searchParams.delete('doc'); // Temp files don't have URL persistence
+            window.history.pushState({}, '', u);
+          }
+          if (activeFile && !activeFile.isTemp) joinSession(newActive);
         } else {
-          window.history.pushState({}, '', '/');
+          // No files left
+          const url = new URL(window.location);
+          url.searchParams.delete('doc');
+          window.history.pushState({}, '', url);
         }
       }
       return newFiles;
     });
   };
 
-  const handleCursorChange = useCallback((pos) => {
-    setCursorPosition(pos);
-  }, []);
+  const handleCursorChange = (position) => {
+    setCursorPosition(position);
+    // Future: Broadcast cursor position via WebSocket
+  };
+
+  // ... (cursor handler) ...
 
   if (!currentInterview) {
     return (
@@ -240,17 +301,20 @@ function App() {
 
   return (
     <div className="App">
-      <div style={{ backgroundColor: '#1e1e1e', color: '#888', padding: '5px 10px', fontSize: '12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between' }}>
-        <span>Interview: <strong>{currentInterview.name}</strong></span>
-        <span style={{ cursor: 'pointer', color: '#007acc' }} onClick={() => {
-          setCurrentInterview(null);
-          window.history.pushState({}, '', '/');
-        }}>Switch Interview</span>
-      </div>
+      <SaveFileNameDialog
+        isOpen={isSaveAsOpen}
+        onClose={() => setIsSaveAsOpen(false)}
+        onSave={handleSaveAs}
+      />
 
       <FileControl
         fileName={currentFile ? currentFile.name : null}
-        interviewId={currentInterview.id} // Passing ID to FileControl
+        interviewId={currentInterview.id}
+        interviewName={currentInterview.name}
+        onExit={() => {
+          setCurrentInterview(null);
+          window.history.pushState({}, '', '/');
+        }}
         onCreateFile={handleCreateFile}
         onSave={handleSave}
         onLoadFile={handleLoadFile}
