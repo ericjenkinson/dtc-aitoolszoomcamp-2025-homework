@@ -46,6 +46,14 @@ function App() {
     if (pyodideError) setNotification({ message: 'Failed to load Python environment: ' + pyodideError, type: 'error' });
   }, [pyodideError]);
 
+  // Persist Open Files
+  useEffect(() => {
+    if (openFiles.length > 0) {
+      const ids = openFiles.map(f => f.id);
+      localStorage.setItem('openFileIds', JSON.stringify(ids));
+    }
+  }, [openFiles]);
+
   // Initial Check
   useEffect(() => {
     const init = async () => {
@@ -58,10 +66,27 @@ function App() {
           setCurrentInterview(found);
           const files = await api.listFiles(found.id);
           setProjectFiles(files);
-          // Don't auto-load doc yet via handleLoadFile immediately if we rely on WS sync?
-          // But initial load is usually fine.
+
+          // Restore open files
+          const savedIds = localStorage.getItem('openFileIds');
+          let idsToLoad = [];
+          if (savedIds) {
+            try {
+              idsToLoad = JSON.parse(savedIds);
+            } catch (e) { console.error('Failed to parse saved tabs', e); }
+          }
+
           const docId = params.get('doc');
-          if (docId) handleLoadFile(docId, found.id, false);
+          if (docId && !idsToLoad.includes(docId) && !idsToLoad.includes(parseInt(docId))) {
+            idsToLoad.push(docId);
+          }
+
+          // Load all files
+          for (const id of idsToLoad) {
+            // We can use handleLoadFile, but careful of race/broadcast.
+            // Initial load should NOT broadcast.
+            await handleLoadFile(id, found.id, false);
+          }
         } else {
           window.history.replaceState({}, '', '/');
         }
@@ -229,7 +254,10 @@ function App() {
 
     const file = await api.getFile(id);
     if (file) {
-      setOpenFiles(prev => [...prev, { ...file, savedContent: file.content }]);
+      setOpenFiles(prev => {
+        if (prev.some(f => f.id === file.id)) return prev;
+        return [...prev, { ...file, savedContent: file.content }];
+      });
       setActiveFileId(file.id);
       const url = new URL(window.location);
       url.searchParams.set('doc', file.id);
