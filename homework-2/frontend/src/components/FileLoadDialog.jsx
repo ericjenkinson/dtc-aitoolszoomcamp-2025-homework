@@ -2,20 +2,36 @@ import React, { useState, useMemo } from 'react';
 
 export function FileLoadDialog({ isOpen, onClose, files, onSelectFile }) {
     const [sortBy, setSortBy] = useState('name'); // 'name' | 'type'
+    const [sortDirection, setSortDirection] = useState('asc'); // 'asc' | 'desc'
+
+    const handleSort = (criteria) => {
+        if (sortBy === criteria) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(criteria);
+            setSortDirection('asc');
+        }
+    };
 
     const sortedFiles = useMemo(() => {
-        return [...files].sort((a, b) => {
+        const sorted = [...files].sort((a, b) => {
+            let result = 0;
             if (sortBy === 'name') {
-                return a.name.localeCompare(b.name);
+                result = a.name.localeCompare(b.name);
             } else {
                 // Sort by extension
                 const extA = a.name.split('.').pop();
                 const extB = b.name.split('.').pop();
-                if (extA !== extB) return extA.localeCompare(extB);
-                return a.name.localeCompare(b.name);
+                if (extA !== extB) {
+                    result = extA.localeCompare(extB);
+                } else {
+                    result = a.name.localeCompare(b.name);
+                }
             }
+            return sortDirection === 'asc' ? result : -result;
         });
-    }, [files, sortBy]);
+        return sorted;
+    }, [files, sortBy, sortDirection]);
 
     if (!isOpen) return null;
 
@@ -60,7 +76,7 @@ export function FileLoadDialog({ isOpen, onClose, files, onSelectFile }) {
                 <div style={{ padding: '10px 16px', display: 'flex', gap: '10px', borderBottom: '1px solid #333' }}>
                     <span style={{ color: '#888', marginRight: 'auto' }}>Sort by:</span>
                     <button
-                        onClick={() => setSortBy('name')}
+                        onClick={() => handleSort('name')}
                         style={{
                             padding: '4px 8px',
                             backgroundColor: sortBy === 'name' ? '#4CAF50' : '#333',
@@ -70,10 +86,10 @@ export function FileLoadDialog({ isOpen, onClose, files, onSelectFile }) {
                             cursor: 'pointer'
                         }}
                     >
-                        Name
+                        Name {sortBy === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
                     </button>
                     <button
-                        onClick={() => setSortBy('type')}
+                        onClick={() => handleSort('type')}
                         style={{
                             padding: '4px 8px',
                             backgroundColor: sortBy === 'type' ? '#4CAF50' : '#333',
@@ -83,7 +99,7 @@ export function FileLoadDialog({ isOpen, onClose, files, onSelectFile }) {
                             cursor: 'pointer'
                         }}
                     >
-                        Type
+                        Type {sortBy === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
                     </button>
                 </div>
 
