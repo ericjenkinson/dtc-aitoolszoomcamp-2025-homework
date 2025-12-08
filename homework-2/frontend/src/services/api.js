@@ -102,10 +102,10 @@ export const api = {
     },
 
     // WebSocket connection
-    joinSession(fileId, userId, onEvent) {
+    joinSession(interviewId, userId, onEvent) {
         const wsProtocol = API_URL.startsWith('https') ? 'wss' : 'ws';
         const wsHost = API_URL.replace(/^http(s)?:\/\//, '');
-        const wsUrl = `${wsProtocol}://${wsHost}/ws/${fileId}/${userId}`;
+        const wsUrl = `${wsProtocol}://${wsHost}/ws/${interviewId}/${userId}`;
 
         console.log('Connecting to WS:', wsUrl);
         const ws = new WebSocket(wsUrl);

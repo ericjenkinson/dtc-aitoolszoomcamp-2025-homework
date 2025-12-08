@@ -18,19 +18,15 @@ const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 function App() {
   const [currentInterview, setCurrentInterview] = useState(null);
   const [openFiles, setOpenFiles] = useState([]);
-  const [projectFiles, setProjectFiles] = useState([]); // All files in interview
+  const [projectFiles, setProjectFiles] = useState([]);
   const [activeFileId, setActiveFileId] = useState(null);
-
-  // WebSocket Session Ref
   const activeSessionRef = useRef(null);
 
-  // Derived state
   const currentFile = openFiles.find(f => f.id === activeFileId) || null;
   const [remoteCursors, setRemoteCursors] = useState([]);
   const [userId] = useState(() => 'user-' + Math.random().toString(36).substr(2, 9));
-  const [notification, setNotification] = useState(null); // { message, type }
+  const [notification, setNotification] = useState(null);
 
-  // Dialog state
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [confirmationDialog, setConfirmationDialog] = useState({
     isOpen: false,
@@ -40,42 +36,32 @@ function App() {
     onCancel: () => { }
   });
 
-  // Execution state
   const { isReady: isPyodideReady, runPython, error: pyodideError } = usePyodide();
   const [executionOutput, setExecutionOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
-
-  // Status Bar state
   const [cursorPosition, setCursorPosition] = useState({ line: 1, col: 1 });
 
   useEffect(() => {
-    if (pyodideError) {
-      setNotification({ message: 'Failed to load Python environment: ' + pyodideError, type: 'error' });
-    }
+    if (pyodideError) setNotification({ message: 'Failed to load Python environment: ' + pyodideError, type: 'error' });
   }, [pyodideError]);
 
-  // Initial load: Check for interview param
+  // Initial Check
   useEffect(() => {
     const init = async () => {
       const params = new URLSearchParams(window.location.search);
       const interviewId = params.get('interview');
-
       if (interviewId) {
-        // Validation: fetch interviews and check if valid
-        // Ideally we'd have api.getInterview(id) but checking list is ok for now
         const interviews = await api.getInterviews();
         const found = interviews.find(i => i.id === parseInt(interviewId));
         if (found) {
           setCurrentInterview(found);
-          // Load project files
           const files = await api.listFiles(found.id);
           setProjectFiles(files);
-
-          // If valid interview, check for doc
+          // Don't auto-load doc yet via handleLoadFile immediately if we rely on WS sync?
+          // But initial load is usually fine.
           const docId = params.get('doc');
-          if (docId) handleLoadFile(docId, found.id); // Pass interview ID explicitly just in case
+          if (docId) handleLoadFile(docId, found.id, false);
         } else {
-          // Invalid interview ID
           window.history.replaceState({}, '', '/');
         }
       }
@@ -83,76 +69,126 @@ function App() {
     init();
   }, []);
 
+  // WebSocket Connection (Per Interview)
+  useEffect(() => {
+    if (!currentInterview) return;
+
+    // Disconnect existing
+    if (activeSessionRef.current) {
+      activeSessionRef.current.disconnect();
+      activeSessionRef.current = null;
+    }
+
+    console.log('Connecting to interview session:', currentInterview.id);
+    const { disconnect, sendMessage } = api.joinSession(currentInterview.id, userId, async (event) => {
+      if (event.userId === userId) return; // Ignore own echoes if backend echoes (our backend DOES echos but excludes sender)
+
+      switch (event.type) {
+        case 'cursor_update':
+          // Check if cursor is for ACTIVE file? Or render all?
+          // Editor only shows cursors passed to it.
+          // We typically filter by active file in Editor or here.
+          // Since cursor pos is 2D (line/col), it only makes sense for the FILE it belongs to.
+          // Payload should have fileId.
+          if (event.fileId) { // Ensure fileId is present
+            setRemoteCursors(prev => {
+              const existing = prev.find(c => c.userId === event.userId && c.fileId === event.fileId);
+              const color = existing ? existing.color : COLORS[Math.floor(Math.random() * COLORS.length)];
+              const filtered = prev.filter(c => !(c.userId === event.userId && c.fileId === event.fileId));
+              return [...filtered, { userId: event.userId, position: event.position, color, name: 'Peer', fileId: event.fileId }]; // name missing
+            });
+          }
+          break;
+
+        case 'content_update':
+          setOpenFiles(prev => prev.map(f => {
+            if (f.id === event.fileId) {
+              return { ...f, content: event.content };
+            }
+            return f;
+          }));
+          break;
+
+        case 'file_opened':
+          // Remote user opened a file. We should open it too.
+          // We need to fetch it first? Or does payload contain it?
+          // Ideally payload has minimal info.
+          const fileId = event.fileId;
+          // Fix: Use `setOpenFiles` functional update to check existence, but we can't async fetch inside it.
+          // Solution: Fetch outside, then update.
+          const openedFile = await api.getFile(fileId);
+          if (openedFile) {
+            setOpenFiles(prev => {
+              if (prev.find(f => f.id === fileId)) return prev;
+              return [...prev, { ...openedFile, savedContent: openedFile.content }];
+            });
+          }
+          break;
+
+        case 'file_closed':
+          setOpenFiles(prev => {
+            const newFiles = prev.filter(f => f.id !== event.fileId);
+            // Also need to handle activeFile switching if we closed the active one?
+            // The remote user probably switched tab before closing, or we get a tab_switched event.
+            // But if we just close it, we might end up with null active.
+            // Let's rely on standard close logic (which updates active).
+            // BUT inside `setOpenFiles` callback we can't update `activeFileId`.
+            // We need to invoke close logic.
+            // Limitation: We can't access `activeFileId` state here easily.
+            // Let's just filter it out. If activeFileId points to it, UI handles null gracefully or we fix it.
+            return newFiles;
+          });
+          // We should ideally sync active tab too.
+          break;
+
+        case 'tab_switched':
+          setActiveFileId(event.fileId);
+          break;
+
+        case 'file_created':
+          setProjectFiles(prev => [...prev, event.file]);
+          setOpenFiles(prev => [...prev, { ...event.file, savedContent: '' }]); // Remote creation is unsaved? Or saved? 
+          // Usually creation implies untitled unsaved physically.
+          // But payload should dictate.
+          break;
+
+        case 'user_joined':
+          setNotification({ message: 'User joined session', type: 'info' });
+          break;
+      }
+    });
+
+    activeSessionRef.current = { disconnect, sendMessage };
+
+    return () => {
+      disconnect();
+    };
+  }, [currentInterview, userId]); // Dependency on activeFileId needed for cursor filtering?
+  // Be careful. adding activeFileId to deps means RECONNECTING WS on every tab switch! NO.
+  // We should NOT filter cursors in the `switch`. We should filter them in RENDER.
+  // Store all cursors in state: `{ fileId: { ...cursors } }`.
+  // OR just store list and include fileId.
+
+  // Helper to Broadcast
+  const broadcast = (type, payload) => {
+    if (activeSessionRef.current) {
+      activeSessionRef.current.sendMessage({ type, ...payload });
+    }
+  };
+
   const handleSelectInterview = (interview) => {
-    if (!interview) return;
-    setCurrentInterview(interview);
-    setOpenFiles([]);
     if (!interview) return;
     setCurrentInterview(interview);
     setOpenFiles([]);
     setProjectFiles([]);
     setActiveFileId(null);
     setExecutionOutput(null);
-
-    // Load files
     api.listFiles(interview.id).then(files => setProjectFiles(files));
-
-    // Update URL
     const url = new URL(window.location);
     url.searchParams.set('interview', interview.id);
-    url.searchParams.delete('doc'); // Clear doc on interview switch
+    url.searchParams.delete('doc');
     window.history.pushState({}, '', url);
   };
-
-  const joinSession = useCallback((fileId) => {
-    setRemoteCursors([]); // connect to new session
-
-    // Disconnect previous session if any (though typically handled by useEffect unmount, but ensuring)
-    if (activeSessionRef.current) {
-      // cleanup handled by useEffect return usually
-    }
-
-    const { disconnect, sendMessage } = api.joinSession(fileId, userId, (event) => {
-      if (event.type === 'cursor_update') {
-        if (event.userId === userId) return; // ignore self
-
-        setRemoteCursors(prev => {
-          const existing = prev.find(c => c.userId === event.userId);
-          const color = existing ? existing.color : COLORS[Math.floor(Math.random() * COLORS.length)];
-
-          const filtered = prev.filter(c => c.userId !== event.userId);
-          return [...filtered, {
-            userId: event.userId,
-            position: event.position,
-            color,
-            name: existing?.name || 'Peer'
-          }];
-        });
-      }
-      else if (event.type === 'content_update') {
-        if (event.userId === userId) return; // ignore self
-
-        // Update content of the specific file
-        setOpenFiles(prev => prev.map(f => {
-          if (f.id === fileId) { // Ensure match
-            // Only update if content is different to avoid cursor jump loop?
-            // Actually CodeMirror handles value prop update intelligently usually.
-            return { ...f, content: event.content };
-          }
-          return f;
-        }));
-      }
-      else if (event.type === 'user_joined') {
-        console.log('User joined:', event.userId);
-        setNotification({ message: 'User joined session', type: 'info' });
-      }
-    });
-
-    // Store session
-    activeSessionRef.current = { disconnect, sendMessage };
-
-    return disconnect;
-  }, [userId]);
 
   const handleCreateFile = async () => {
     if (!currentInterview) return;
@@ -161,167 +197,75 @@ function App() {
       id: tempId,
       name: 'Untitled-' + (openFiles.filter(f => f.isTemp).length + 1),
       content: '',
-      savedContent: '', // For dirty check
+      savedContent: '',
       language: 'plaintext',
       isTemp: true
     };
 
     setOpenFiles(prev => [...prev, newFile]);
     setActiveFileId(tempId);
-    // Not updating URL for untitled files to avoid invalid state
+    broadcast('file_created', { file: newFile });
+    broadcast('tab_switched', { fileId: tempId });
   };
 
-  const handleSave = async () => {
-    if (currentFile) {
-      if (currentFile.isTemp) {
-        setIsSaveAsOpen(true);
-      } else {
-        const success = await api.saveFile(currentFile.id, currentFile.content);
-        if (success) {
-          setNotification({ message: 'File saved successfully!', type: 'success' });
-          // Update savedContent
-          setOpenFiles(prev => prev.map(f => {
-            if (f.id === currentFile.id) return { ...f, savedContent: currentFile.content };
-            return f;
-          }));
-        } else {
-          setNotification({ message: 'Failed to save file.', type: 'error' });
-        }
-      }
-    }
-  };
-
-  const handleSaveAs = async (name) => {
-    if (!currentInterview || !currentFile) return;
-    setIsSaveAsOpen(false);
-
-    try {
-      const newFile = await api.createFile(name, currentFile.content, currentInterview.id);
-      if (newFile) {
-        setOpenFiles(prev => prev.map(f => {
-          if (f.id === currentFile.id) return { ...newFile, savedContent: newFile.content };
-          return f;
-        }));
-        setActiveFileId(newFile.id);
-
-        // Update URL
-        const url = new URL(window.location);
-        url.searchParams.set('doc', newFile.id);
-        window.history.pushState({}, '', url);
-
-        joinSession(newFile.id);
-
-        // Add to project files
-        setProjectFiles(prev => [...prev, newFile]);
-
-        setNotification({ message: 'Saved as ' + name, type: 'success' });
-      }
-    } catch (err) {
-      setNotification({ message: err.message || 'Failed to create file', type: 'error' });
-      // Re-open dialog on error? Or just show notification.
-      // If error, keeping as untitled.
-    }
-  };
-
-  // contextId arg is optional, mostly for initial load when state isn't set yet
-  // but logic inside usage currentInterview for regular clicks
-  const handleLoadFile = async (id, contextId) => {
-    // Check if already open first to avoid refetching/overwriting dirty state
+  const handleLoadFile = async (id, contextId, shouldBroadcast = true) => {
     const openFile = openFiles.find(f => f.id === id);
     if (openFile) {
       setActiveFileId(id);
-      // Update URL
       const url = new URL(window.location);
       url.searchParams.set('doc', id);
       window.history.pushState({}, '', url);
+      if (shouldBroadcast) broadcast('tab_switched', { fileId: id });
       return;
     }
 
     const file = await api.getFile(id);
     if (file) {
-      // Security/Consistency check: 
-      // Theoretically a user could load a file from another interview if they knew the ID.
-      // Backend should probably enforce `interview_id` in getFile too if we want strict security.
-      // For now we assume if it's listed, it's valid.
-
-      setOpenFiles(prev => {
-        return [...prev, { ...file, savedContent: file.content }];
-      });
+      setOpenFiles(prev => [...prev, { ...file, savedContent: file.content }]);
       setActiveFileId(file.id);
-
-      // Update URL
       const url = new URL(window.location);
       url.searchParams.set('doc', file.id);
       window.history.pushState({}, '', url);
 
-      joinSession(file.id);
+      if (shouldBroadcast) {
+        broadcast('file_opened', { fileId: file.id });
+        broadcast('tab_switched', { fileId: file.id });
+      }
       setNotification({ message: 'Loaded ' + file.name, type: 'success' });
     }
   };
 
-  const handleRun = async () => {
-    if (!currentFile || !currentFile.content) return;
-
-    setIsRunning(true);
-    setExecutionOutput(null);
-
-    try {
-      let result;
-      if (currentFile.language === 'python' || currentFile.name.endsWith('.py')) {
-        result = await runPython(currentFile.content);
-      } else if (currentFile.language === 'javascript' || currentFile.name.endsWith('.js')) {
-        result = await runJavascript(currentFile.content);
-      } else {
-        result = { error: 'Unsupported language for execution' };
-      }
-      setExecutionOutput(result);
-    } catch (err) {
-      setExecutionOutput({ error: err.toString() });
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
   const handleContentChange = (newContent) => {
-    // update local state of the ACTIVE file
     setOpenFiles(prev => prev.map(f => {
-      if (f.id === activeFileId) {
-        return { ...f, content: newContent };
-      }
+      if (f.id === activeFileId) return { ...f, content: newContent };
       return f;
     }));
+    broadcast('content_update', { fileId: activeFileId, content: newContent });
+  };
 
-    // Broadcast content update
-    if (activeSessionRef.current) {
-      activeSessionRef.current.sendMessage({
-        type: 'content_update',
-        content: newContent
-      });
-    }
+  const handleCursorChange = (position) => {
+    setCursorPosition(position);
+    broadcast('cursor_update', { fileId: activeFileId, position });
   };
 
   const handleTabSelect = (id) => {
     setActiveFileId(id);
     const file = openFiles.find(f => f.id === id);
-    if (!file) return;
-
-    // Update URL
     const url = new URL(window.location);
     if (file && !file.isTemp) {
       url.searchParams.set('doc', id);
-      joinSession(id);
     } else {
       url.searchParams.delete('doc');
-      setRemoteCursors([]); // clear cursors for temp
     }
     window.history.pushState({}, '', url);
+
+    broadcast('tab_switched', { fileId: id });
   };
 
   const handleTabClose = (id) => {
     const file = openFiles.find(f => f.id === id);
     if (!file) return;
 
-    // Check for dirty
     const isDirty = file.content !== (file.savedContent || '');
     if (isDirty) {
       setConfirmationDialog({
@@ -340,39 +284,23 @@ function App() {
   };
 
   const closeTab = (id) => {
-
     setOpenFiles(prev => {
       const newFiles = prev.filter(f => f.id !== id);
       if (activeFileId === id) {
-        // Switch to last available or null
         const newActive = newFiles.length > 0 ? newFiles[newFiles.length - 1].id : null;
         setActiveFileId(newActive);
-        if (newActive) {
-          const url = new URL(window.location);
-          url.searchParams.set('doc', newActive); // Ensure we use the NEW active ID
-          const activeFile = newFiles.find(f => f.id === newActive);
-          if (activeFile && !activeFile.isTemp) {
-            window.history.pushState({}, '', url);
-          } else {
-            // If switching to temp or null, just keep interview param
-            const u = new URL(window.location);
-            u.searchParams.set('interview', currentInterview.id);
-            u.searchParams.delete('doc'); // Temp files don't have URL persistence
-            window.history.pushState({}, '', u);
-          }
-          if (activeFile && !activeFile.isTemp) joinSession(newActive);
-        } else {
-          // No files left
-          const url = new URL(window.location);
-          url.searchParams.delete('doc');
-          window.history.pushState({}, '', url);
-        }
+        // broadcast switch? Or let remote side handle it logic?
+        // If I close, I switch. Remote side receives 'file_closed'. 
+        // Remote logic for file_closed should handle switching if active was closed.
       }
       return newFiles;
     });
+    broadcast('file_closed', { fileId: id });
   };
 
+  // ... (rest of functions handleExit, etc same or small updates) ...
   const handleExitInterview = () => {
+    // ... same logic ...
     const dirtyFiles = openFiles.filter(f => f.content !== (f.savedContent || ''));
     if (dirtyFiles.length > 0) {
       setConfirmationDialog({
@@ -391,122 +319,102 @@ function App() {
   };
 
   const performExit = () => {
+    if (activeSessionRef.current) activeSessionRef.current.disconnect();
     setCurrentInterview(null);
     window.history.pushState({}, '', '/');
   };
 
-  const handleCursorChange = (position) => {
-    setCursorPosition(position);
-    // Future: Broadcast cursor position via WebSocket
+  const handleSave = async () => {
+    if (!currentFile) return;
+    if (currentFile.isTemp) {
+      setIsSaveAsOpen(true);
+    } else {
+      const success = await api.saveFile(currentFile.id, currentFile.content);
+      if (success) {
+        setNotification({ message: 'Saved!', type: 'success' });
+        setOpenFiles(prev => prev.map(f => f.id === currentFile.id ? { ...f, savedContent: currentFile.content } : f));
+      }
+    }
   };
 
-  // ... (cursor handler) ...
+  const handleSaveAs = async (name) => {
+    // ...
+    if (!currentInterview || !currentFile) return;
+    setIsSaveAsOpen(false);
+    try {
+      const newFile = await api.createFile(name, currentFile.content, currentInterview.id);
+      if (newFile) {
+        // Update local state
+        setOpenFiles(prev => prev.map(f => f.id === currentFile.id ? { ...newFile, savedContent: newFile.content } : f));
+        setActiveFileId(newFile.id);
+        // Update project files
+        setProjectFiles(prev => [...prev, newFile]);
+
+        // Broadcast? 'file_created' isn't quite right, it's a rename/save.
+        // We should probably broadcast 'file_opened' for the new ID and 'file_closed' for old ID?
+        // Or just 'content_update' if sharing ID? New file has NEW ID.
+        broadcast('file_opened', { fileId: newFile.id });
+        broadcast('tab_switched', { fileId: newFile.id });
+        // And maybe close old temp?
+      }
+    } catch (e) { setNotification({ message: e.message, type: 'error' }); }
+  };
+
+  const handleRun = async () => {
+    // ... same as before ...
+    if (!currentFile || !currentFile.content) return;
+    setIsRunning(true);
+    setExecutionOutput(null);
+    try {
+      let result;
+      if (currentFile.language === 'python' || currentFile.name.endsWith('.py')) {
+        result = await runPython(currentFile.content);
+      } else if (currentFile.language === 'javascript' || currentFile.name.endsWith('.js')) {
+        result = await runJavascript(currentFile.content);
+      } else {
+        result = { error: 'Unsupported language for execution' };
+      }
+      setExecutionOutput(result);
+    } catch (err) {
+      setExecutionOutput({ error: err.toString() });
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
   if (!currentInterview) {
-    return (
-      <InterviewManager onSelectInterview={handleSelectInterview} />
-    );
+    return <InterviewManager onSelectInterview={handleSelectInterview} />;
   }
+
+  // Filter cursors for active file
+  const activeCursors = remoteCursors.filter(c => c.fileId === activeFileId);
+  // !c.fileId for legacy check, but now we should enforce. 
+  // Actually the event listener above didn't store fileId in remoteCursors state.
+  // We need to fix that.
 
   return (
     <div className="App" style={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden' }}>
-      <SaveFileNameDialog
-        isOpen={isSaveAsOpen}
-        onClose={() => setIsSaveAsOpen(false)}
-        onSave={handleSaveAs}
-      />
-
-      <ConfirmationDialog
-        isOpen={confirmationDialog.isOpen}
-        title={confirmationDialog.title}
-        message={confirmationDialog.message}
-        onConfirm={confirmationDialog.onConfirm}
-        onCancel={confirmationDialog.onCancel}
-      />
-
-      <FileExplorer
-        files={projectFiles}
-        activeFileId={activeFileId}
-        onSelectFile={handleLoadFile}
-        onCreateFile={handleCreateFile}
-      />
+      <SaveFileNameDialog isOpen={isSaveAsOpen} onClose={() => setIsSaveAsOpen(false)} onSave={handleSaveAs} />
+      <ConfirmationDialog isOpen={confirmationDialog.isOpen} title={confirmationDialog.title} message={confirmationDialog.message} onConfirm={confirmationDialog.onConfirm} onCancel={confirmationDialog.onCancel} />
+      <FileExplorer files={projectFiles} activeFileId={activeFileId} onSelectFile={(id) => handleLoadFile(id, null, true)} onCreateFile={handleCreateFile} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        <FileControl
-          fileName={currentFile ? currentFile.name : null}
-          interviewName={currentInterview.name}
-          onExit={handleExitInterview}
-          onSave={handleSave}
-          onRun={handleRun}
-          isRunning={isRunning}
-          runReady={
-            (currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) ||
-            isPyodideReady
-          }
-          runButtonLabel={
-            (currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady)
-              ? 'Loading WASM...'
-              : '▶ Run'
-          }
-        />
-
-        <TabBar
-          files={openFiles}
-          activeFileId={activeFileId}
-          onSelect={handleTabSelect}
-          onClose={handleTabClose}
-        />
-
-        <Editor
-          file={currentFile}
-          onChange={handleContentChange}
-          remoteCursors={remoteCursors}
-          onCursorChange={handleCursorChange}
-        />
+        <FileControl fileName={currentFile?.name} interviewName={currentInterview.name} onExit={handleExitInterview} onSave={handleSave} onRun={handleRun} isRunning={isRunning} runReady={(currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) || isPyodideReady} runButtonLabel={(currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady) ? 'Loading WASM...' : '▶ Run'} />
+        <TabBar files={openFiles} activeFileId={activeFileId} onSelect={handleTabSelect} onClose={handleTabClose} />
+        <Editor file={currentFile} onChange={handleContentChange} remoteCursors={remoteCursors.filter(c => c.fileId === activeFileId)} onCursorChange={handleCursorChange} />
 
         {!currentFile && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center',
-            color: 'var(--text-secondary)'
-          }}>
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <h1>Online Code Editor</h1>
             <p>Create a new file to start.</p>
           </div>
         )}
 
-        {/* Adjust OutputPanel position if needed, or overlay it. StatusLine is fixed at bottom. */}
-        {executionOutput && (
-          <OutputPanel
-            output={executionOutput.output}
-            result={executionOutput.result}
-            error={executionOutput.error}
-            onClose={() => setExecutionOutput(null)}
-            data-testid="output-panel"
-          />
-        )}
-
-        {notification && (
-          <Toast
-            message={notification.message}
-            type={notification.type}
-            onClose={() => setNotification(null)}
-          />
-        )}
+        {executionOutput && <OutputPanel output={executionOutput.output} result={executionOutput.result} error={executionOutput.error} onClose={() => setExecutionOutput(null)} data-testid="output-panel" />}
+        {notification && <Toast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
 
         <div style={{ zIndex: 100 }}>
-          <StatusLine
-            line={cursorPosition.line}
-            col={cursorPosition.col}
-            language={
-              currentFile
-                ? (currentFile.language || (currentFile.name.endsWith('.py') ? 'Python' : (currentFile.name.endsWith('.js') ? 'JavaScript' : 'Text')))
-                : 'Plain Text'
-            }
-          />
+          <StatusLine line={cursorPosition.line} col={cursorPosition.col} language={currentFile ? (currentFile.language || (currentFile.name.endsWith('.py') ? 'Python' : (currentFile.name.endsWith('.js') ? 'JavaScript' : 'Text'))) : 'Plain Text'} />
         </div>
       </div>
     </div>

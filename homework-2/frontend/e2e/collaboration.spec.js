@@ -52,7 +52,21 @@ test.describe('Real-time Collaboration', () => {
         // 6. Verify User 1 sees it
         await expect(page1.locator('.cm-content')).toContainText('print("Hello from User 2")');
 
+        // 7. Verify Action Sync: Create File
+        await page1.getByTitle('New File').click();
+        await expect(page1.getByText('Untitled-2*')).toBeVisible();
+        // User 2 should see it immediately
+        await expect(page2.getByText('Untitled-2*')).toBeVisible();
+
+        // 8. Verify Action Sync: Switch Tab
+        // User 1 switches back to collab.py
+        await page1.getByText('collab.py').click();
+        // User 2 should switch automatically
+        // Wait for switch
+        await expect(page2.locator('.cm-content')).toContainText('print("Hello from User 2")');
+
         await user1Context.close();
         await user2Context.close();
     });
 });
+
