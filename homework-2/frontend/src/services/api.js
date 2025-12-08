@@ -1,4 +1,4 @@
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = 'http://localhost:8000';
 
 export const api = {
     async listFiles() {
@@ -33,7 +33,7 @@ export const api = {
             return await response.json();
         } catch (error) {
             console.error('Error creating file:', error);
-            return null;
+            throw error; // Propagate error to caller
         }
     },
 

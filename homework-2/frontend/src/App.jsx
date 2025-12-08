@@ -73,18 +73,20 @@ function App() {
   }, [userId]);
 
   const handleCreateFile = async (name) => {
-    const newFile = await api.createFile(name, '// Start coding...');
-    if (newFile) {
-      setCurrentFile(newFile);
-      // Update URL
-      const url = new URL(window.location);
-      url.searchParams.set('doc', newFile.id);
-      window.history.pushState({}, '', url);
+    try {
+      const newFile = await api.createFile(name, '// Start coding...');
+      if (newFile) {
+        setCurrentFile(newFile);
+        // Update URL
+        const url = new URL(window.location);
+        url.searchParams.set('doc', newFile.id);
+        window.history.pushState({}, '', url);
 
-      joinSession(newFile.id);
-      setNotification({ message: 'Created ' + name, type: 'success' });
-    } else {
-      setNotification({ message: 'Failed to create file', type: 'error' });
+        joinSession(newFile.id);
+        setNotification({ message: 'Created ' + name, type: 'success' });
+      }
+    } catch (err) {
+      setNotification({ message: err.message || 'Failed to create file', type: 'error' });
     }
   };
 
