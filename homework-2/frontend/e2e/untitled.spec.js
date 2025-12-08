@@ -54,23 +54,22 @@ test.describe('Untitled File Workflow', () => {
         // 3. Edit (Dirty)
         await page.locator('.cm-content').fill('dirty content');
 
-        // 4. Handle Dialog
-        let dialogMessage = '';
-        page.on('dialog', async dialog => {
-            dialogMessage = dialog.message();
-            await dialog.dismiss(); // Cancel close
-        });
-
         // 5. Try Close
         await page.getByTitle('Close tab').click();
-        expect(dialogMessage).toBe('You have unsaved changes. Close without saving?');
-        await expect(page.getByText('Untitled-1')).toBeVisible(); // Still open because dismissed
 
-        // 6. Accept Dialog
-        page.on('dialog', async dialog => {
-            await dialog.accept();
-        });
+        // Expect Custom Dialog
+        await expect(page.getByText('Unsaved Changes')).toBeVisible();
+        await expect(page.getByText('Close without saving?')).toBeVisible();
+
+        // Cancel
+        await page.getByRole('button', { name: 'Cancel' }).click();
+        await expect(page.getByText('Untitled-1')).toBeVisible(); // Still open
+
+        // 6. Close and Confirm
         await page.getByTitle('Close tab').click();
+        await page.getByRole('button', { name: 'Confirm' }).click();
+
+        // 7. Verify Gone
         await expect(page.getByText('Untitled-1')).not.toBeVisible();
     });
 });

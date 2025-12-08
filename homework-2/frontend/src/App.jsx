@@ -7,6 +7,7 @@ import { Toast } from './components/Toast';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
 import { SaveFileNameDialog } from './components/SaveFileNameDialog';
+import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { FileExplorer } from './components/FileExplorer';
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
@@ -28,6 +29,13 @@ function App() {
 
   // Dialog state
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
+  const [confirmationDialog, setConfirmationDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    onCancel: () => { }
+  });
 
   // Execution state
   const { isReady: isPyodideReady, runPython, error: pyodideError } = usePyodide();
@@ -127,6 +135,7 @@ function App() {
       id: tempId,
       name: 'Untitled-' + (openFiles.filter(f => f.isTemp).length + 1),
       content: '',
+      savedContent: '', // For dirty check
       language: 'plaintext',
       isTemp: true
     };
@@ -144,6 +153,11 @@ function App() {
         const success = await api.saveFile(currentFile.id, currentFile.content);
         if (success) {
           setNotification({ message: 'File saved successfully!', type: 'success' });
+          // Update savedContent
+          setOpenFiles(prev => prev.map(f => {
+            if (f.id === currentFile.id) return { ...f, savedContent: currentFile.content };
+            return f;
+          }));
         } else {
           setNotification({ message: 'Failed to save file.', type: 'error' });
         }
@@ -159,7 +173,7 @@ function App() {
       const newFile = await api.createFile(name, currentFile.content, currentInterview.id);
       if (newFile) {
         setOpenFiles(prev => prev.map(f => {
-          if (f.id === currentFile.id) return newFile;
+          if (f.id === currentFile.id) return { ...newFile, savedContent: newFile.content };
           return f;
         }));
         setActiveFileId(newFile.id);
@@ -199,7 +213,7 @@ function App() {
       setOpenFiles(prev => {
         const exists = prev.find(f => f.id === file.id);
         if (exists) return prev; // Already open
-        return [...prev, file];
+        return [...prev, { ...file, savedContent: file.content }];
       });
       setActiveFileId(file.id);
 
@@ -249,6 +263,7 @@ function App() {
   const handleTabSelect = (id) => {
     setActiveFileId(id);
     const file = openFiles.find(f => f.id === id);
+    if (!file) return;
 
     // Update URL
     const url = new URL(window.location);
@@ -266,11 +281,25 @@ function App() {
     const file = openFiles.find(f => f.id === id);
     if (!file) return;
 
-    if (file.isTemp && file.content.length > 0) {
-      if (!window.confirm('You have unsaved changes. Close without saving?')) {
-        return;
-      }
+    // Check for dirty
+    const isDirty = file.content !== (file.savedContent || '');
+    if (isDirty) {
+      setConfirmationDialog({
+        isOpen: true,
+        title: 'Unsaved Changes',
+        message: `You have unsaved changes in ${file.name}. Close without saving?`,
+        onConfirm: () => {
+          setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+          closeTab(id);
+        },
+        onCancel: () => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
     }
+    closeTab(id);
+  };
+
+  const closeTab = (id) => {
 
     setOpenFiles(prev => {
       const newFiles = prev.filter(f => f.id !== id);
@@ -303,6 +332,29 @@ function App() {
     });
   };
 
+  const handleExitInterview = () => {
+    const dirtyFiles = openFiles.filter(f => f.content !== (f.savedContent || ''));
+    if (dirtyFiles.length > 0) {
+      setConfirmationDialog({
+        isOpen: true,
+        title: 'Unsaved Changes',
+        message: `You have ${dirtyFiles.length} unsaved file(s). Exit interview without saving?`,
+        onConfirm: () => {
+          setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
+          performExit();
+        },
+        onCancel: () => setConfirmationDialog(prev => ({ ...prev, isOpen: false }))
+      });
+    } else {
+      performExit();
+    }
+  };
+
+  const performExit = () => {
+    setCurrentInterview(null);
+    window.history.pushState({}, '', '/');
+  };
+
   const handleCursorChange = (position) => {
     setCursorPosition(position);
     // Future: Broadcast cursor position via WebSocket
@@ -324,6 +376,14 @@ function App() {
         onSave={handleSaveAs}
       />
 
+      <ConfirmationDialog
+        isOpen={confirmationDialog.isOpen}
+        title={confirmationDialog.title}
+        message={confirmationDialog.message}
+        onConfirm={confirmationDialog.onConfirm}
+        onCancel={confirmationDialog.onCancel}
+      />
+
       <FileExplorer
         files={projectFiles}
         activeFileId={activeFileId}
@@ -335,10 +395,7 @@ function App() {
         <FileControl
           fileName={currentFile ? currentFile.name : null}
           interviewName={currentInterview.name}
-          onExit={() => {
-            setCurrentInterview(null);
-            window.history.pushState({}, '', '/');
-          }}
+          onExit={handleExitInterview}
           onSave={handleSave}
           onRun={handleRun}
           isRunning={isRunning}

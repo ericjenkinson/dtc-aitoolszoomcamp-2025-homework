@@ -1,27 +1,11 @@
 # Page snapshot
 
 ```yaml
-- generic [ref=e3]:
-  - generic [ref=e4]:
-    - generic [ref=e5]:
-      - generic [ref=e6]: Explorer
-      - button "+" [ref=e7] [cursor=pointer]
-    - generic [ref=e9]: No files
-  - generic [ref=e10]:
-    - generic [ref=e11]:
-      - button "← UntitledTest 1765223702520" [ref=e13] [cursor=pointer]
-      - generic [ref=e14]: No file selected
-    - generic [ref=e15]:
-      - button "Save" [disabled] [ref=e16]
-      - button "▶ Run" [ref=e18] [cursor=pointer]
-    - generic [ref=e19]: No file selected. Create or open a file to start editing.
-    - generic [ref=e20]:
-      - heading "Online Code Editor" [level=1] [ref=e21]
-      - paragraph [ref=e22]: Create a new file to start.
-    - generic [ref=e24]:
-      - generic [ref=e25] [cursor=pointer]: Ln 1, Col 1
-      - generic [ref=e26] [cursor=pointer]: "Spaces: 4"
-      - generic [ref=e27] [cursor=pointer]: UTF-8
-      - generic [ref=e28] [cursor=pointer]: LF
-      - generic [ref=e29] [cursor=pointer]: Plain Text
+- generic [ref=e4]:
+  - heading "Interview Manager" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - textbox "Interview Name (e.g. Candidate A)" [ref=e7]: UntitledTest 1765224335444
+    - button "Create" [active] [ref=e8] [cursor=pointer]
+  - generic [ref=e9]: Failed to create interview
+  - paragraph [ref=e11]: No interviews found. Create one to start.
 ```
