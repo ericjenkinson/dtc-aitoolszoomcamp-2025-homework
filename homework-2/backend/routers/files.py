@@ -8,6 +8,16 @@ from models import File, FileCreate, FileRead, FileUpdate
 
 router = APIRouter(prefix="/files", tags=["files"])
 
+@router.get("/", response_model=List[FileRead])
+def get_files(
+    *,
+    session: Session = Depends(get_session),
+    offset: int = 0,
+    limit: int = Query(default=100, le=100),
+):
+    files = session.exec(select(File).offset(offset).limit(limit)).all()
+    return files
+
 @router.post("/", response_model=FileRead)
 def create_file(*, session: Session = Depends(get_session), file: FileCreate):
     # Set language based on extension if not provided or just checking

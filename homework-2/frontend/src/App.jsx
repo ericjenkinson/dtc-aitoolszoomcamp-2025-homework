@@ -80,6 +80,19 @@ function App() {
     }
   };
 
+  const handleLoadFile = async (id) => {
+    const file = await api.getFile(id);
+    if (file) {
+      setCurrentFile(file);
+      // Update URL
+      const url = new URL(window.location);
+      url.searchParams.set('doc', file.id);
+      window.history.pushState({}, '', url);
+
+      joinSession(file.id);
+    }
+  };
+
   const handleContentChange = (newContent) => {
     // update local state
     setCurrentFile(prev => ({ ...prev, content: newContent }));
@@ -91,6 +104,7 @@ function App() {
         fileName={currentFile?.name}
         onCreateFile={handleCreateFile}
         onSave={handleSave}
+        onLoadFile={handleLoadFile}
       />
 
       <Editor
