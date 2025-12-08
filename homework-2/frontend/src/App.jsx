@@ -4,6 +4,9 @@ import { FileControl } from './components/FileControl';
 import { mockBackend as api } from './services/api';
 import { Toast } from './components/Toast';
 
+import { usePyodide } from './hooks/usePyodide';
+import { OutputPanel } from './components/OutputPanel';
+
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 
 function App() {
@@ -11,6 +14,17 @@ function App() {
   const [remoteCursors, setRemoteCursors] = useState([]);
   const [userId] = useState(() => 'user-' + Math.random().toString(36).substr(2, 9));
   const [notification, setNotification] = useState(null); // { message, type }
+
+  // Execution state
+  const { isReady: isPyodideReady, runPython, error: pyodideError } = usePyodide();
+  const [executionOutput, setExecutionOutput] = useState(null);
+  const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    if (pyodideError) {
+      setNotification({ message: 'Failed to load Python environment: ' + pyodideError, type: 'error' });
+    }
+  }, [pyodideError]);
 
   // Basic routing via query params 
   useEffect(() => {
@@ -99,6 +113,22 @@ function App() {
     }
   };
 
+  const handleRun = async () => {
+    if (!currentFile || !currentFile.content) return;
+
+    setIsRunning(true);
+    setExecutionOutput(null);
+
+    try {
+      const result = await runPython(currentFile.content);
+      setExecutionOutput(result);
+    } catch (err) {
+      setExecutionOutput({ error: err.toString() });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const handleContentChange = (newContent) => {
     // update local state
     setCurrentFile(prev => ({ ...prev, content: newContent }));
@@ -111,6 +141,9 @@ function App() {
         onCreateFile={handleCreateFile}
         onSave={handleSave}
         onLoadFile={handleLoadFile}
+        onRun={handleRun}
+        isRunning={isRunning}
+        isPyodideReady={isPyodideReady}
       />
 
       <Editor
@@ -131,6 +164,15 @@ function App() {
           <h1>Online Code Editor</h1>
           <p>Create a new file to start or ask your interviewer for a link.</p>
         </div>
+      )}
+
+      {executionOutput && (
+        <OutputPanel
+          output={executionOutput.output}
+          result={executionOutput.result}
+          error={executionOutput.error}
+          onClose={() => setExecutionOutput(null)}
+        />
       )}
 
       {notification && (
