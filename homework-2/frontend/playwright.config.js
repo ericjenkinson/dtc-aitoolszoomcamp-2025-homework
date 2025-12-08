@@ -5,7 +5,7 @@ export default defineConfig({
     timeout: 30000,
     retries: 0,
     use: {
-        baseURL: 'http://localhost:5173',
+        baseURL: 'http://localhost:5174',
         trace: 'on-first-retry',
     },
     projects: [
@@ -15,8 +15,8 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: 'npm run dev',
-        port: 5173,
+        command: 'npm run test:frontend:server', // Runs on 5174, connects to API 8001
+        port: 5174,
         reuseExistingServer: !process.env.CI,
     },
 });

@@ -35,11 +35,11 @@ test.describe('Collaborative Editor Integration', () => {
         await page.reload();
 
         // Editor should be empty initially or show blank state
-        // Click Load
-        await page.click('button:has-text("Load File")');
+        // Open Load Dialog
+        await page.getByTestId('load-file-button').click();
 
-        // Find our file in the list and click it
-        await page.click(`text=${filename}`);
+        // Wait for list and click file
+        await page.getByTestId(`file-row-${filename}`).click();
 
         // Verify content
         await expect(page.locator('.cm-content')).toContainText('console.log("Integration Test");');
