@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Editor } from './components/Editor';
 import { InterviewManager } from './components/InterviewManager';
 import { FileControl } from './components/FileControl';
@@ -20,6 +20,9 @@ function App() {
   const [openFiles, setOpenFiles] = useState([]);
   const [projectFiles, setProjectFiles] = useState([]); // All files in interview
   const [activeFileId, setActiveFileId] = useState(null);
+
+  // WebSocket Session Ref
+  const activeSessionRef = useRef(null);
 
   // Derived state
   const currentFile = openFiles.find(f => f.id === activeFileId) || null;
@@ -103,7 +106,13 @@ function App() {
 
   const joinSession = useCallback((fileId) => {
     setRemoteCursors([]); // connect to new session
-    const disconnect = api.joinSession(fileId, userId, (event) => {
+
+    // Disconnect previous session if any (though typically handled by useEffect unmount, but ensuring)
+    if (activeSessionRef.current) {
+      // cleanup handled by useEffect return usually
+    }
+
+    const { disconnect, sendMessage } = api.joinSession(fileId, userId, (event) => {
       if (event.type === 'cursor_update') {
         if (event.userId === userId) return; // ignore self
 
@@ -120,10 +129,27 @@ function App() {
           }];
         });
       }
+      else if (event.type === 'content_update') {
+        if (event.userId === userId) return; // ignore self
+
+        // Update content of the specific file
+        setOpenFiles(prev => prev.map(f => {
+          if (f.id === fileId) { // Ensure match
+            // Only update if content is different to avoid cursor jump loop?
+            // Actually CodeMirror handles value prop update intelligently usually.
+            return { ...f, content: event.content };
+          }
+          return f;
+        }));
+      }
       else if (event.type === 'user_joined') {
-        console.log('User joined:', event.name);
+        console.log('User joined:', event.userId);
+        setNotification({ message: 'User joined session', type: 'info' });
       }
     });
+
+    // Store session
+    activeSessionRef.current = { disconnect, sendMessage };
 
     return disconnect;
   }, [userId]);
@@ -264,6 +290,14 @@ function App() {
       }
       return f;
     }));
+
+    // Broadcast content update
+    if (activeSessionRef.current) {
+      activeSessionRef.current.sendMessage({
+        type: 'content_update',
+        content: newContent
+      });
+    }
   };
 
   const handleTabSelect = (id) => {

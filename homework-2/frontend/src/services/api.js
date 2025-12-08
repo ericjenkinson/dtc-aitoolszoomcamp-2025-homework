@@ -101,11 +101,61 @@ export const api = {
         }
     },
 
-    // WebSocket simulation for now (until we implement real WebSockets)
+    // WebSocket connection
     joinSession(fileId, userId, onEvent) {
-        // For now, no-op or simulate generic events
-        // Real implementation would connect to a WS endpoint
-        return () => { };
+        const wsProtocol = API_URL.startsWith('https') ? 'wss' : 'ws';
+        const wsHost = API_URL.replace(/^http(s)?:\/\//, '');
+        const wsUrl = `${wsProtocol}://${wsHost}/ws/${fileId}/${userId}`;
+
+        console.log('Connecting to WS:', wsUrl);
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log('WS Connected');
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                onEvent(data);
+            } catch (e) {
+                console.error('Error parsing WS message:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('WS Disconnected');
+        };
+
+        ws.onerror = (error) => {
+            console.error('WS Error:', error);
+        };
+
+        // Return a sender function and a cleanup function ? 
+        // Or actually calling logic expects just a disconnect function?
+        // Wait, App.jsx uses it like `const disconnect = api.joinSession(...)`.
+        // Ideally we need to send messages too.
+        // We can attach `send` to the return object or change API structure.
+        // BUT App.jsx currently only consumes events. It needs to SEND too.
+        // The current App.jsx doesn't have a mechanism to SEND via this specific connection instance easily unless we expose it.
+        // Let's modify App.jsx to use `api.sendMessage`? Or `api.joinSession` returns object { disconnect, send }.
+
+        // For minimal refactor, let's attach send to the return or a separate method?
+        // Actually, App.jsx implementation of `joinSession` (useEffect/callback) calls it and gets a disconnect clbk.
+        // We need to change `joinSession` to return { disconnect, send } OR we use a global/cached socket (risky).
+
+        // Let's update App.jsx to expect { disconnect, sendMessage }
+
+        return {
+            disconnect: () => {
+                if (ws.readyState === WebSocket.OPEN) ws.close();
+            },
+            sendMessage: (msg) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(msg));
+                }
+            }
+        };
     }
 };
 
