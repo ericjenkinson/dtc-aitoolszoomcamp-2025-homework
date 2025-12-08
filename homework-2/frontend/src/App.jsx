@@ -4,6 +4,7 @@ import { FileControl } from './components/FileControl';
 import { api } from './services/api';
 import { Toast } from './components/Toast';
 import { StatusLine } from './components/StatusLine';
+import { TabBar } from './components/TabBar';
 
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
@@ -12,7 +13,11 @@ import { OutputPanel } from './components/OutputPanel';
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 
 function App() {
-  const [currentFile, setCurrentFile] = useState(null);
+  const [openFiles, setOpenFiles] = useState([]);
+  const [activeFileId, setActiveFileId] = useState(null);
+
+  // Derived state
+  const currentFile = openFiles.find(f => f.id === activeFileId) || null;
   const [remoteCursors, setRemoteCursors] = useState([]);
   const [userId] = useState(() => 'user-' + Math.random().toString(36).substr(2, 9));
   const [notification, setNotification] = useState(null); // { message, type }
@@ -39,7 +44,14 @@ function App() {
       if (docId) {
         const file = await api.getFile(docId);
         if (file) {
-          setCurrentFile(file);
+          // If not already in openFiles, add it? Or replace? 
+          // For deep link, let's just open it as the single file for now or append.
+          // Let's append if not present.
+          setOpenFiles(prev => {
+            if (prev.find(f => f.id === file.id)) return prev;
+            return [...prev, file];
+          });
+          setActiveFileId(file.id);
           joinSession(docId);
         } else {
           // Handle 404 - for now just clear
@@ -81,7 +93,9 @@ function App() {
     try {
       const newFile = await api.createFile(name, '// Start coding...');
       if (newFile) {
-        setCurrentFile(newFile);
+        setOpenFiles(prev => [...prev, newFile]);
+        setActiveFileId(newFile.id);
+
         // Update URL
         const url = new URL(window.location);
         url.searchParams.set('doc', newFile.id);
@@ -109,7 +123,13 @@ function App() {
   const handleLoadFile = async (id) => {
     const file = await api.getFile(id);
     if (file) {
-      setCurrentFile(file);
+      setOpenFiles(prev => {
+        const exists = prev.find(f => f.id === file.id);
+        if (exists) return prev; // Already open
+        return [...prev, file];
+      });
+      setActiveFileId(file.id);
+
       // Update URL
       const url = new URL(window.location);
       url.searchParams.set('doc', file.id);
@@ -144,8 +164,42 @@ function App() {
   };
 
   const handleContentChange = (newContent) => {
-    // update local state
-    setCurrentFile(prev => ({ ...prev, content: newContent }));
+    // update local state of the ACTIVE file
+    setOpenFiles(prev => prev.map(f => {
+      if (f.id === activeFileId) {
+        return { ...f, content: newContent };
+      }
+      return f;
+    }));
+  };
+
+  const handleTabSelect = (id) => {
+    setActiveFileId(id);
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('doc', id);
+    window.history.pushState({}, '', url);
+    joinSession(id);
+  };
+
+  const handleTabClose = (id) => {
+    setOpenFiles(prev => {
+      const newFiles = prev.filter(f => f.id !== id);
+      if (activeFileId === id) {
+        // Switch to last available or null
+        const newActive = newFiles.length > 0 ? newFiles[newFiles.length - 1].id : null;
+        setActiveFileId(newActive);
+        if (newActive) {
+          const url = new URL(window.location);
+          url.searchParams.set('doc', newActive);
+          window.history.pushState({}, '', url);
+          joinSession(newActive);
+        } else {
+          window.history.pushState({}, '', '/');
+        }
+      }
+      return newFiles;
+    });
   };
 
   const handleCursorChange = useCallback((pos) => {
@@ -170,6 +224,13 @@ function App() {
             ? 'Loading WASM...'
             : '▶ Run'
         }
+      />
+
+      <TabBar
+        files={openFiles}
+        activeFileId={activeFileId}
+        onSelect={handleTabSelect}
+        onClose={handleTabClose}
       />
 
       <Editor
