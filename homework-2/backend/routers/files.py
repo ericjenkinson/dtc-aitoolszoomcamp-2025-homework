@@ -14,8 +14,9 @@ def get_files(
     session: Session = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=100, le=100),
+    interview_id: int = Query(...), 
 ):
-    files = session.exec(select(File).offset(offset).limit(limit)).all()
+    files = session.exec(select(File).where(File.interview_id == interview_id).offset(offset).limit(limit)).all()
     return files
 
 @router.post("/", response_model=FileRead)

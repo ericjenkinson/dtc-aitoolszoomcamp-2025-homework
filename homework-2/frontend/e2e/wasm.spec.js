@@ -21,6 +21,11 @@ test.describe('WASM Python Execution', () => {
 
         await page.goto('/');
 
+        // Create Interview context
+        const interviewName = 'WASM Interview ' + Date.now();
+        await page.getByPlaceholder('Interview Name').fill(interviewName);
+        await page.getByRole('button', { name: 'Create' }).click();
+
         // Wait for Pyodide to be ready. 
         // The button text changes from "Loading WASM..." to "▶ Run"
         // Create a file first

@@ -2,14 +2,21 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Collaborative Editor Integration', () => {
 
-    test('should load the app and show the title', async ({ page }) => {
+    test('should load the app and show the interview manager', async ({ page }) => {
         page.on('console', msg => console.log('PAGE LOG:', msg.text()));
         await page.goto('/');
-        await expect(page.locator('h1')).toContainText('Online Code Editor');
+        await expect(page.locator('h1')).toContainText('Interview Manager');
     });
 
     test('should create, save, and load a file', async ({ page }) => {
         page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+
+
+        // 0. Create Interview context
+        await page.goto('/');
+        const interviewName = 'Integration ' + Date.now();
+        await page.getByPlaceholder('Interview Name').fill(interviewName);
+        await page.getByRole('button', { name: 'Create' }).click();
 
         // 1. Create a new file
         await page.goto('/');

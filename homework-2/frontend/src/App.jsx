@@ -5,6 +5,7 @@ import { api } from './services/api';
 import { Toast } from './components/Toast';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
+import { InterviewManager } from './components/InterviewManager';
 
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
@@ -13,6 +14,7 @@ import { OutputPanel } from './components/OutputPanel';
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 
 function App() {
+  const [currentInterview, setCurrentInterview] = useState(null);
   const [openFiles, setOpenFiles] = useState([]);
   const [activeFileId, setActiveFileId] = useState(null);
 
@@ -36,31 +38,44 @@ function App() {
     }
   }, [pyodideError]);
 
-  // Basic routing via query params 
+  // Initial load: Check for interview param
   useEffect(() => {
-    const fetchFile = async () => {
+    const init = async () => {
       const params = new URLSearchParams(window.location.search);
-      const docId = params.get('doc');
-      if (docId) {
-        const file = await api.getFile(docId);
-        if (file) {
-          // If not already in openFiles, add it? Or replace? 
-          // For deep link, let's just open it as the single file for now or append.
-          // Let's append if not present.
-          setOpenFiles(prev => {
-            if (prev.find(f => f.id === file.id)) return prev;
-            return [...prev, file];
-          });
-          setActiveFileId(file.id);
-          joinSession(docId);
+      const interviewId = params.get('interview');
+
+      if (interviewId) {
+        // Validation: fetch interviews and check if valid
+        // Ideally we'd have api.getInterview(id) but checking list is ok for now
+        const interviews = await api.getInterviews();
+        const found = interviews.find(i => i.id === parseInt(interviewId));
+        if (found) {
+          setCurrentInterview(found);
+          // If valid interview, check for doc
+          const docId = params.get('doc');
+          if (docId) handleLoadFile(docId, found.id); // Pass interview ID explicitly just in case
         } else {
-          // Handle 404 - for now just clear
+          // Invalid interview ID
           window.history.replaceState({}, '', '/');
         }
       }
     };
-    fetchFile();
+    init();
   }, []);
+
+  const handleSelectInterview = (interview) => {
+    if (!interview) return;
+    setCurrentInterview(interview);
+    setOpenFiles([]);
+    setActiveFileId(null);
+    setExecutionOutput(null);
+
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('interview', interview.id);
+    url.searchParams.delete('doc'); // Clear doc on interview switch
+    window.history.pushState({}, '', url);
+  };
 
   const joinSession = useCallback((fileId) => {
     setRemoteCursors([]); // connect to new session
@@ -90,15 +105,16 @@ function App() {
   }, [userId]);
 
   const handleCreateFile = async (name) => {
+    if (!currentInterview) return;
     try {
-      const newFile = await api.createFile(name, '// Start coding...');
+      const newFile = await api.createFile(name, '// Start coding...', currentInterview.id);
       if (newFile) {
         setOpenFiles(prev => [...prev, newFile]);
         setActiveFileId(newFile.id);
 
         // Update URL
         const url = new URL(window.location);
-        url.searchParams.set('doc', newFile.id);
+        url.searchParams.set('doc', newFile.id); // interview param persists
         window.history.pushState({}, '', url);
 
         joinSession(newFile.id);
@@ -120,9 +136,19 @@ function App() {
     }
   };
 
-  const handleLoadFile = async (id) => {
+  // contextId arg is optional, mostly for initial load when state isn't set yet
+  // but logic inside usage currentInterview for regular clicks
+  const handleLoadFile = async (id, contextId) => {
+    // Wait, list of files in FileDialog will now be scoped to interview.
+    // getFile(id) doesn't strictly check interview_id on backend unless we add logic, but UI flow enforces it.
+
     const file = await api.getFile(id);
     if (file) {
+      // Security/Consistency check: 
+      // Theoretically a user could load a file from another interview if they knew the ID.
+      // Backend should probably enforce `interview_id` in getFile too if we want strict security.
+      // For now we assume if it's listed, it's valid.
+
       setOpenFiles(prev => {
         const exists = prev.find(f => f.id === file.id);
         if (exists) return prev; // Already open
@@ -206,10 +232,25 @@ function App() {
     setCursorPosition(pos);
   }, []);
 
+  if (!currentInterview) {
+    return (
+      <InterviewManager onSelectInterview={handleSelectInterview} />
+    );
+  }
+
   return (
     <div className="App">
+      <div style={{ backgroundColor: '#1e1e1e', color: '#888', padding: '5px 10px', fontSize: '12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between' }}>
+        <span>Interview: <strong>{currentInterview.name}</strong></span>
+        <span style={{ cursor: 'pointer', color: '#007acc' }} onClick={() => {
+          setCurrentInterview(null);
+          window.history.pushState({}, '', '/');
+        }}>Switch Interview</span>
+      </div>
+
       <FileControl
         fileName={currentFile ? currentFile.name : null}
+        interviewId={currentInterview.id} // Passing ID to FileControl
         onCreateFile={handleCreateFile}
         onSave={handleSave}
         onLoadFile={handleLoadFile}
@@ -250,7 +291,7 @@ function App() {
           color: 'var(--text-secondary)'
         }}>
           <h1>Online Code Editor</h1>
-          <p>Create a new file to start or ask your interviewer for a link.</p>
+          <p>Create a new file to start.</p>
         </div>
       )}
 

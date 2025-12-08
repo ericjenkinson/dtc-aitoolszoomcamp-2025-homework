@@ -1,0 +1,60 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - heading "Interview Manager" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - textbox "Interview Name (e.g. Candidate A)" [ref=e7]
+    - button "Create" [disabled] [ref=e8] [cursor=pointer]
+  - generic [ref=e10]:
+    - generic [ref=e11] [cursor=pointer]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: Test Interview 1765212799256
+        - generic [ref=e14]: "ID: 1 • 12/8/2025"
+      - button "🗑️" [ref=e15]
+    - generic [ref=e16] [cursor=pointer]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: Integration 1765212799362
+        - generic [ref=e19]: "ID: 2 • 12/8/2025"
+      - button "🗑️" [ref=e20]
+    - generic [ref=e21] [cursor=pointer]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: JS Interview 1765212799226
+        - generic [ref=e24]: "ID: 3 • 12/8/2025"
+      - button "🗑️" [ref=e25]
+    - generic [ref=e26] [cursor=pointer]:
+      - generic [ref=e27]:
+        - generic [ref=e28]: WASM Interview 1765212799216
+        - generic [ref=e29]: "ID: 4 • 12/8/2025"
+      - button "🗑️" [ref=e30]
+    - generic [ref=e31] [cursor=pointer]:
+      - generic [ref=e32]:
+        - generic [ref=e33]: Test Interview 1765212830180
+        - generic [ref=e34]: "ID: 5 • 12/8/2025"
+      - button "🗑️" [ref=e35]
+    - generic [ref=e36] [cursor=pointer]:
+      - generic [ref=e37]:
+        - generic [ref=e38]: Test Interview 1765212866780
+        - generic [ref=e39]: "ID: 6 • 12/8/2025"
+      - button "🗑️" [ref=e40]
+    - generic [ref=e41] [cursor=pointer]:
+      - generic [ref=e42]:
+        - generic [ref=e43]: Second Interview 1765212868328
+        - generic [ref=e44]: "ID: 7 • 12/8/2025"
+      - button "🗑️" [ref=e45]
+    - generic [ref=e46] [cursor=pointer]:
+      - generic [ref=e47]:
+        - generic [ref=e48]: JS Interview 1765212891859
+        - generic [ref=e49]: "ID: 8 • 12/8/2025"
+      - button "🗑️" [ref=e50]
+    - generic [ref=e51] [cursor=pointer]:
+      - generic [ref=e52]:
+        - generic [ref=e53]: WASM Interview 1765212891859
+        - generic [ref=e54]: "ID: 9 • 12/8/2025"
+      - button "🗑️" [ref=e55]
+    - generic [ref=e56] [cursor=pointer]:
+      - generic [ref=e57]:
+        - generic [ref=e58]: Integration 1765212892057
+        - generic [ref=e59]: "ID: 10 • 12/8/2025"
+      - button "🗑️" [ref=e60]
+```

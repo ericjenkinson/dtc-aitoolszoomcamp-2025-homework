@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { FileLoadDialog } from './FileLoadDialog';
 
-export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel }) {
+export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun, isRunning, runReady, runButtonLabel, interviewId }) {
     const [newFileName, setNewFileName] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
@@ -17,7 +17,8 @@ export function FileControl({ fileName, onCreateFile, onSave, onLoadFile, onRun,
     };
 
     const openLoadDialog = async () => {
-        const files = await api.listFiles();
+        if (!interviewId) return;
+        const files = await api.listFiles(interviewId);
         setFileList(files);
         setIsLoadDialogOpen(true);
     };

@@ -18,6 +18,11 @@ test.describe('JavaScript Execution', () => {
 
         await page.goto('/');
 
+        // Create Interview context
+        const interviewName = 'JS Interview ' + Date.now();
+        await page.getByPlaceholder('Interview Name').fill(interviewName);
+        await page.getByRole('button', { name: 'Create' }).click();
+
         // Create a file first
         await page.click('button:has-text("+ New File")');
         await page.fill('input[placeholder="filename.js or .py"]', 'test.js');

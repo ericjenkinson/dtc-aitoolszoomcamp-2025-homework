@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import create_db_and_tables
-from routers import files
+from routers import files, interviews
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(files.router)
+app.include_router(interviews.router)
 
 @app.get("/")
 def read_root():
