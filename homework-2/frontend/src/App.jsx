@@ -200,8 +200,16 @@ function App() {
   // contextId arg is optional, mostly for initial load when state isn't set yet
   // but logic inside usage currentInterview for regular clicks
   const handleLoadFile = async (id, contextId) => {
-    // Wait, list of files in FileDialog will now be scoped to interview.
-    // getFile(id) doesn't strictly check interview_id on backend unless we add logic, but UI flow enforces it.
+    // Check if already open first to avoid refetching/overwriting dirty state
+    const openFile = openFiles.find(f => f.id === id);
+    if (openFile) {
+      setActiveFileId(id);
+      // Update URL
+      const url = new URL(window.location);
+      url.searchParams.set('doc', id);
+      window.history.pushState({}, '', url);
+      return;
+    }
 
     const file = await api.getFile(id);
     if (file) {
@@ -211,8 +219,6 @@ function App() {
       // For now we assume if it's listed, it's valid.
 
       setOpenFiles(prev => {
-        const exists = prev.find(f => f.id === file.id);
-        if (exists) return prev; // Already open
         return [...prev, { ...file, savedContent: file.content }];
       });
       setActiveFileId(file.id);
