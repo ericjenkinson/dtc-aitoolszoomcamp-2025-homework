@@ -1,6 +1,14 @@
 import React from 'react';
+import { FileCode, File } from 'lucide-react';
 
 export function FileExplorer({ files, activeFileId, onSelectFile, onCreateFile }) {
+
+    const getFileIcon = (name) => {
+        if (name.endsWith('.py')) return <FileCode size={14} color="#3776AB" />;
+        if (name.endsWith('.js')) return <FileCode size={14} color="#F0DB4F" />;
+        return <File size={14} color="#ccc" />;
+    };
+
     return (
         <div style={{
             width: '250px',
@@ -65,8 +73,8 @@ export function FileExplorer({ files, activeFileId, onSelectFile, onCreateFile }
                                 if (file.id !== activeFileId) e.currentTarget.style.backgroundColor = 'transparent';
                             }}
                         >
-                            <span style={{ fontSize: '14px' }}>
-                                {file.name.endsWith('.py') ? '🐍' : file.name.endsWith('.js') ? '📜' : '📄'}
+                            <span style={{ display: 'flex', alignItems: 'center' }}>
+                                {getFileIcon(file.name)}
                             </span>
                             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {file.name}

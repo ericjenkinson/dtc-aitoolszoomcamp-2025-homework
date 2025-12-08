@@ -54,6 +54,9 @@ test.describe('Untitled File Workflow', () => {
         // 3. Edit (Dirty)
         await page.locator('.cm-content').fill('dirty content');
 
+        // Check for * indicator
+        await expect(page.getByText('Untitled-1*')).toBeVisible();
+
         // 5. Try Close
         await page.getByTitle('Close tab').click();
 
