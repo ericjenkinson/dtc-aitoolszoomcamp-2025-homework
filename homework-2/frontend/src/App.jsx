@@ -12,6 +12,7 @@ import { FileExplorer } from './components/FileExplorer';
 import { usePyodide } from './hooks/usePyodide';
 import { runJavascript } from './utils/jsRunner';
 import { OutputPanel } from './components/OutputPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F5', '#33FFF5'];
 
@@ -95,7 +96,14 @@ function App() {
               const existing = prev.find(c => c.userId === event.userId && c.fileId === event.fileId);
               const color = existing ? existing.color : COLORS[Math.floor(Math.random() * COLORS.length)];
               const filtered = prev.filter(c => !(c.userId === event.userId && c.fileId === event.fileId));
-              return [...filtered, { userId: event.userId, position: event.position, color, name: 'Peer', fileId: event.fileId }]; // name missing
+              return [...filtered, {
+                userId: event.userId,
+                position: event.position,
+                selection: event.selection, // Add selection
+                color,
+                name: 'Peer',
+                fileId: event.fileId
+              }];
             });
           }
           break;
@@ -243,9 +251,17 @@ function App() {
     broadcast('content_update', { fileId: activeFileId, content: newContent });
   };
 
-  const handleCursorChange = (position) => {
-    setCursorPosition(position);
-    broadcast('cursor_update', { fileId: activeFileId, position });
+  const handleCursorChange = (cursorData) => {
+    setCursorPosition({ line: cursorData.line, col: cursorData.col });
+    // Broadcast cursor position (including selection)
+    if (activeSessionRef.current) {
+      activeSessionRef.current.sendMessage({
+        type: 'cursor_update',
+        position: cursorData.position,
+        selection: cursorData.selection,
+        fileId: activeFileId // Ensure fileId is sent for filtering
+      });
+    }
   };
 
   const handleTabSelect = (id) => {
@@ -401,8 +417,14 @@ function App() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <FileControl fileName={currentFile?.name} interviewName={currentInterview.name} onExit={handleExitInterview} onSave={handleSave} onRun={handleRun} isRunning={isRunning} runReady={(currentFile && (currentFile.language === 'javascript' || currentFile.name.endsWith('.js'))) || isPyodideReady} runButtonLabel={(currentFile && (currentFile.language === 'python' || currentFile.name.endsWith('.py')) && !isPyodideReady) ? 'Loading WASM...' : '▶ Run'} />
         <TabBar files={openFiles} activeFileId={activeFileId} onSelect={handleTabSelect} onClose={handleTabClose} />
-        <Editor file={currentFile} onChange={handleContentChange} remoteCursors={remoteCursors.filter(c => c.fileId === activeFileId)} onCursorChange={handleCursorChange} />
-
+        <ErrorBoundary>
+          <Editor
+            file={currentFile}
+            onChange={handleContentChange}
+            remoteCursors={remoteCursors.filter(c => c.fileId === activeFileId)}
+            onCursorChange={handleCursorChange}
+          />
+        </ErrorBoundary>
         {!currentFile && (
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'var(--text-secondary)' }}>
             <h1>Online Code Editor</h1>
