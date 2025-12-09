@@ -4,3 +4,4 @@ sqlmodel
 pydantic
 aiofiles
 gunicorn
+websockets

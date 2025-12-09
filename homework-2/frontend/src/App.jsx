@@ -185,6 +185,24 @@ function App() {
           // But payload should dictate.
           break;
 
+        case 'file_saved_as':
+          const { oldId, file } = event;
+          // 1. Update Project Files: Remove old temp (if present), add new file.
+          setProjectFiles(prev => [...prev.filter(f => f.id !== oldId), file]);
+
+          // 2. Update Open Files: find the tab with oldId and replace it in-place to keep order/focus context?
+          // Actually, we want to update the ID and content/savedContent.
+          setOpenFiles(prev => prev.map(f => {
+            if (f.id === oldId) {
+              return { ...file, savedContent: file.content };
+            }
+            return f;
+          }));
+
+          // 3. Update Active File ID if we were looking at the old temp file
+          setActiveFileId(prev => (prev === oldId ? file.id : prev));
+          break;
+
         case 'user_joined':
           setNotification({ message: 'User joined session', type: 'info' });
           break;
@@ -394,12 +412,10 @@ function App() {
         // Update project files
         setProjectFiles(prev => [...prev, newFile]);
 
-        // Broadcast? 'file_created' isn't quite right, it's a rename/save.
-        // We should probably broadcast 'file_opened' for the new ID and 'file_closed' for old ID?
-        // Or just 'content_update' if sharing ID? New file has NEW ID.
-        broadcast('file_opened', { fileId: newFile.id });
+        // Broadcast rename event so peers can update their lists and tabs locally
+        broadcast('file_saved_as', { oldId: currentFile.id, file: newFile });
+        // Also broadcast tab switch to the new ID
         broadcast('tab_switched', { fileId: newFile.id });
-        // And maybe close old temp?
       }
     } catch (e) { setNotification({ message: e.message, type: 'error' }); }
   };

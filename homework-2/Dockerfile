@@ -31,4 +31,4 @@ EXPOSE 8000
 ENV RUN_DB_INIT=false
 
 # Run init script then start server
-CMD ["sh", "-c", "RUN_DB_INIT=true python init_db.py && gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
+CMD ["sh", "-c", "RUN_DB_INIT=true python init_db.py && gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
