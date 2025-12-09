@@ -76,3 +76,19 @@ homework-2/
 ├── package.json        # Root scripts (dev, test)
 └── README.md           # This file
 ```
+
+## Docker
+
+You can run the entire application (frontend + backend) in a single container.
+
+### Build
+```bash
+docker build -t codeinterview .
+```
+
+### Run
+```bash
+docker run -p 8000:8000 codeinterview
+```
+
+The application will be available at `http://localhost:8000`.
